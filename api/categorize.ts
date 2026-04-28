@@ -15,8 +15,8 @@
 // /api/extract failed — extraction is allowed to be retried later.
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { llmCall, parseJsonResponse } from "./_llm";
-import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase";
+import { llmCall, parseJsonResponse } from "./_llm.js";
+import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase.js";
 
 const CATEGORY_DEFINITIONS = [
   { key: "cat_revenue",       label: "Revenue / income",                    examples: "invoices issued to customers, sales receipts" },

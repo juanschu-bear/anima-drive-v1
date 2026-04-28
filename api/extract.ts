@@ -14,8 +14,8 @@
 //   6. Insert activity entry.
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { llmCall, parseJsonResponse } from "./_llm";
-import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase";
+import { llmCall, parseJsonResponse } from "./_llm.js";
+import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase.js";
 
 const STORAGE_BUCKET = "ad-docs";
 const SIGNED_URL_TTL_SEC = 60 * 5;
