@@ -5,22 +5,46 @@
 //   - userClient(token): scoped to a specific user, respects RLS
 //   - serviceClient(): bypasses RLS, used to update document state after
 //                      we've verified the user owns the row
+//
+// IMPORTANT: env var checks are deferred until the client functions are
+// actually called. Throwing at module-import time would crash the Vercel
+// function with FUNCTION_INVOCATION_FAILED before it can send a proper
+// JSON error response.
 
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!url) {
-  throw new Error("SUPABASE_URL or VITE_SUPABASE_URL must be set");
+function getUrl(): string {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  if (!url) {
+    throw new Error(
+      "Missing env var: SUPABASE_URL (or VITE_SUPABASE_URL) is not set in this environment.",
+    );
+  }
+  return url;
 }
-if (!anonKey) {
-  throw new Error("SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY must be set");
+
+function getAnonKey(): string {
+  const key = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
+  if (!key) {
+    throw new Error(
+      "Missing env var: SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) is not set in this environment.",
+    );
+  }
+  return key;
+}
+
+function getServiceKey(): string {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
+    throw new Error(
+      "Missing env var: SUPABASE_SERVICE_ROLE_KEY is not set. Note: this must NOT have a VITE_ prefix.",
+    );
+  }
+  return key;
 }
 
 export function userClient(accessToken: string | undefined) {
-  return createClient(url!, anonKey!, {
+  return createClient(getUrl(), getAnonKey(), {
     global: {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
     },
@@ -29,10 +53,7 @@ export function userClient(accessToken: string | undefined) {
 }
 
 export function serviceClient() {
-  if (!serviceKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY must be set for server operations");
-  }
-  return createClient(url!, serviceKey, {
+  return createClient(getUrl(), getServiceKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

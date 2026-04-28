@@ -10,7 +10,7 @@ type TranslationKey =
   | "brand" | "nav_upload" | "nav_ask" | "nav_dashboard" | "nav_documents"
   | "nav_sheets" | "nav_trash" | "nav_contacts"
   | "greet_morning" | "greet_afternoon" | "greet_evening"
-  | "user_name" | "subtitle_dash"
+  | "user_name" | "subtitle_dash" | "subtitle_dash_zero"
   | "kpi_docs" | "kpi_categories" | "kpi_storage" | "kpi_of"
   | "categories" | "recent" | "activity" | "see_all"
   | "cat_revenue" | "cat_expenses" | "cat_salaries" | "cat_rent" | "cat_insurance"
@@ -19,7 +19,7 @@ type TranslationKey =
   | "cat_entertainment" | "cat_other"
   | "act_categorized" | "act_upload" | "act_export" | "act_contract"
   | "act_time_2m" | "act_time_14m" | "act_time_1h" | "act_time_3h"
-  | "ai_title" | "ai_status" | "ai_placeholder" | "ai_typing"
+  | "ai_title" | "ai_status" | "ai_status_docs" | "ai_placeholder" | "ai_typing"
   | "sug_receipts" | "sug_software" | "sug_rental" | "sug_uncat"
   | "ai_msg_user1" | "ai_msg_ai1_p1" | "ai_msg_ai1_p2" | "ai_msg_ai2"
   | "upl_title" | "upl_sub" | "upl_browse" | "upl_uploading" | "upl_speed"
@@ -41,7 +41,8 @@ export const TR: Record<Lang, TranslationDict> = {
     nav_documents: "Documents", nav_sheets: "Sheets", nav_trash: "Trash", nav_contacts: "Contacts",
     greet_morning: "Good morning", greet_afternoon: "Good afternoon", greet_evening: "Good evening",
     user_name: "Maya",
-    subtitle_dash: "47 documents, neatly filed. Ask me anything.",
+    subtitle_dash: "documents, neatly filed. Ask me anything.",
+    subtitle_dash_zero: "Drop your first document. I'll file the rest.",
     kpi_docs: "Total documents", kpi_categories: "Active categories", kpi_storage: "Storage used", kpi_of: "of",
     categories: "Categories", recent: "Recent uploads", activity: "Activity", see_all: "See all",
     cat_revenue: "Revenue", cat_expenses: "Expenses", cat_salaries: "Salaries", cat_rent: "Rent",
@@ -54,7 +55,8 @@ export const TR: Record<Lang, TranslationDict> = {
     act_export: "Export to Anima Sheets completed — 12 transactions",
     act_contract: "Rental contract renewed — Mietvertrag_2026.pdf",
     act_time_2m: "2 min ago", act_time_14m: "14 min ago", act_time_1h: "1 h ago", act_time_3h: "3 h ago",
-    ai_title: "Ask Anima", ai_status: "Ready · indexed 47 docs",
+    ai_title: "Ask Anima", ai_status: "Ready · indexed",
+    ai_status_docs: "docs",
     ai_placeholder: "Ask about your documents…", ai_typing: "Thinking…",
     sug_receipts: "Show all receipts from this month",
     sug_software: "How much did I spend on software?",
@@ -88,7 +90,8 @@ export const TR: Record<Lang, TranslationDict> = {
     nav_documents: "Dokumente", nav_sheets: "Tabellen", nav_trash: "Papierkorb", nav_contacts: "Kontakte",
     greet_morning: "Guten Morgen", greet_afternoon: "Guten Tag", greet_evening: "Guten Abend",
     user_name: "Maya",
-    subtitle_dash: "47 Dokumente, sauber abgelegt. Frag mich alles.",
+    subtitle_dash: "Dokumente, sauber abgelegt. Frag mich alles.",
+    subtitle_dash_zero: "Wirf dein erstes Dokument rein. Den Rest mach ich.",
     kpi_docs: "Dokumente insgesamt", kpi_categories: "Aktive Kategorien", kpi_storage: "Speicher belegt", kpi_of: "von",
     categories: "Kategorien", recent: "Zuletzt hochgeladen", activity: "Aktivität", see_all: "Alle ansehen",
     cat_revenue: "Umsatz", cat_expenses: "Ausgaben", cat_salaries: "Gehälter", cat_rent: "Miete",
@@ -101,7 +104,8 @@ export const TR: Record<Lang, TranslationDict> = {
     act_export: "Export zu Anima Sheets abgeschlossen — 12 Vorgänge",
     act_contract: "Mietvertrag erneuert — Mietvertrag_2026.pdf",
     act_time_2m: "vor 2 Min.", act_time_14m: "vor 14 Min.", act_time_1h: "vor 1 Std.", act_time_3h: "vor 3 Std.",
-    ai_title: "Anima fragen", ai_status: "Bereit · 47 Dokumente indiziert",
+    ai_title: "Anima fragen", ai_status: "Bereit · indiziert",
+    ai_status_docs: "Dokumente",
     ai_placeholder: "Frag nach deinen Dokumenten…", ai_typing: "Denke nach…",
     sug_receipts: "Alle Belege dieses Monats",
     sug_software: "Wie viel habe ich für Software ausgegeben?",
@@ -135,7 +139,8 @@ export const TR: Record<Lang, TranslationDict> = {
     nav_documents: "Documentos", nav_sheets: "Hojas", nav_trash: "Papelera", nav_contacts: "Contactos",
     greet_morning: "Buenos días", greet_afternoon: "Buenas tardes", greet_evening: "Buenas noches",
     user_name: "Maya",
-    subtitle_dash: "47 documentos, bien archivados. Pregúntame lo que quieras.",
+    subtitle_dash: "documentos, bien archivados. Pregúntame lo que quieras.",
+    subtitle_dash_zero: "Sube tu primer documento. Yo me ocupo del resto.",
     kpi_docs: "Documentos totales", kpi_categories: "Categorías activas", kpi_storage: "Almacenamiento usado", kpi_of: "de",
     categories: "Categorías", recent: "Subidas recientes", activity: "Actividad", see_all: "Ver todo",
     cat_revenue: "Ingresos", cat_expenses: "Gastos", cat_salaries: "Salarios", cat_rent: "Alquiler",
@@ -148,7 +153,8 @@ export const TR: Record<Lang, TranslationDict> = {
     act_export: "Exportación a Anima Sheets completada — 12 operaciones",
     act_contract: "Contrato de alquiler renovado — Mietvertrag_2026.pdf",
     act_time_2m: "hace 2 min", act_time_14m: "hace 14 min", act_time_1h: "hace 1 h", act_time_3h: "hace 3 h",
-    ai_title: "Preguntar a Anima", ai_status: "Listo · 47 docs indexados",
+    ai_title: "Preguntar a Anima", ai_status: "Listo · indexados",
+    ai_status_docs: "docs",
     ai_placeholder: "Pregunta sobre tus documentos…", ai_typing: "Pensando…",
     sug_receipts: "Todos los recibos de este mes",
     sug_software: "¿Cuánto gasté en software?",

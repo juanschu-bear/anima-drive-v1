@@ -50,6 +50,17 @@ interface ClassifyResult {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    return await handle(req, res);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[categorize] uncaught error:", err);
+    const message = err instanceof Error ? err.message : "Internal server error";
+    res.status(500).json({ error: message });
+  }
+}
+
+async function handle(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;

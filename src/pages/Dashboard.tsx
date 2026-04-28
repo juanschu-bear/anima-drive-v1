@@ -10,6 +10,7 @@ import { greetKey } from "@/lib/utils";
 import { useUploadModal } from "@/lib/upload-modal";
 import { useCommandPalette } from "@/lib/command-palette";
 import { useDocuments } from "@/lib/useDocuments";
+import { useAuth } from "@/lib/auth";
 import { Sidebar } from "@/components/Sidebar";
 import { AIPanel } from "@/components/AIPanel";
 import { Activity } from "@/components/Activity";
@@ -32,8 +33,28 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
   const navigate = useNavigate();
   const { open: openUpload } = useUploadModal();
   const { open: openSearch } = useCommandPalette();
-  const { documents, isMock } = useDocuments();
+  const { documents, rawDocuments, isMock } = useDocuments();
+  const { user } = useAuth();
   const [treatment, setTreatment] = useState<CategoryTreatment>("grid");
+
+  // User display name: pull from Supabase user metadata if signed in.
+  // Falls back to the localized "Maya" only in true demo mode.
+  const userName = (() => {
+    if (isMock) return t("user_name");
+    const meta = user?.user_metadata as Record<string, unknown> | undefined;
+    const fullName = typeof meta?.full_name === "string" ? meta.full_name : undefined;
+    const firstName = typeof meta?.first_name === "string" ? meta.first_name : undefined;
+    if (firstName) return firstName;
+    if (fullName) return fullName.split(" ")[0];
+    // Fall back to the part before @ in the email.
+    const email = user?.email ?? "";
+    const handle = email.split("@")[0];
+    if (handle) {
+      // Capitalize first letter for niceness.
+      return handle.charAt(0).toUpperCase() + handle.slice(1);
+    }
+    return "there";
+  })();
 
   // In demo mode (no Supabase / no auth) we keep the polished mid-fi numbers.
   // Once a real user is signed in, KPIs reflect their actual document count.
@@ -43,7 +64,10 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
     const set = new Set(documents.map((d) => d.catKey));
     return set.size;
   })();
-  const storageMb = 234;
+  // Storage usage: sum of size_bytes from raw rows (real mode), mock 234 MB otherwise.
+  const storageMb = isMock
+    ? 234
+    : Math.round(rawDocuments.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0) / (1024 * 1024));
 
   const greet = t(greetKey());
   const collapsed = sidebarState === "collapsed";
@@ -110,10 +134,12 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
                   marginTop: 4,
                 }}
               >
-                {greet}, {t("user_name")}.
+                {greet}, {userName}.
               </div>
               <div style={{ fontSize: 14, color: "var(--ad-text-dim)", marginTop: 4 }}>
-                {t("subtitle_dash")}
+                {totalDocs === 0
+                  ? t("subtitle_dash_zero")
+                  : `${totalDocs} ${t("subtitle_dash")}`}
               </div>
             </div>
 

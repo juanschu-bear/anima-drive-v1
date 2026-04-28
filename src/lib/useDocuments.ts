@@ -49,13 +49,13 @@ function formatBytes(b: number): string {
 
 export function useDocuments(): UseDocumentsResult {
   const { user } = useAuth();
-  const [documents, setDocuments] = useState<RecentDoc[]>(RECENT);
+  const configured = isSupabaseConfigured();
+  const isMock = !configured || !user;
+  // Initial state: mock array only in demo mode, otherwise empty until refresh fires.
+  const [documents, setDocuments] = useState<RecentDoc[]>(isMock ? RECENT : []);
   const [rawDocuments, setRawDocuments] = useState<AdDocumentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const configured = isSupabaseConfigured();
-  const isMock = !configured || !user;
 
   const refresh = async () => {
     if (isMock) {

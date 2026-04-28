@@ -9,6 +9,7 @@ import { useLang } from "@/lib/i18n";
 import { RECENT } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useDocuments } from "@/lib/useDocuments";
 import { Panel } from "@/components/ui/Panel";
 import { Icon } from "@/components/ui/Icon";
 import { TypingDots } from "@/components/ui/TypingDots";
@@ -30,6 +31,7 @@ const SUGGESTION_KEYS = ["sug_receipts", "sug_software", "sug_rental", "sug_unca
 export function AIPanel({ width = 360 }: AIPanelProps) {
   const { t } = useLang();
   const { user } = useAuth();
+  const { documents, isMock } = useDocuments();
   const configured = isSupabaseConfigured();
   const [focused, setFocused] = useState(false);
   const [input, setInput] = useState("");
@@ -37,6 +39,9 @@ export function AIPanel({ width = 360 }: AIPanelProps) {
   const [isThinking, setIsThinking] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Doc count for header status line.
+  const docCount = isMock ? 47 : documents.length;
 
   // Initial scripted demo — only shown in demo mode (no auth / no Supabase).
   // For real users we start with an empty thread + greeting.
@@ -263,7 +268,7 @@ export function AIPanel({ width = 360 }: AIPanelProps) {
                   boxShadow: "0 0 6px var(--ad-accent-mint)",
                 }}
               />
-              {t("ai_status")}
+              {t("ai_status")} {docCount} {t("ai_status_docs")}
             </div>
           </div>
         </div>

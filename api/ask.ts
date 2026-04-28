@@ -31,6 +31,17 @@ Output ONLY a JSON object: {"answer": "...", "document_refs": ["doc_id_1", ...]}
 Be concise. Use bullets only when listing 3+ items. Currency amounts: format with the document's currency code.`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    return await handle(req, res);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[ask] uncaught error:", err);
+    const message = err instanceof Error ? err.message : "Internal server error";
+    res.status(500).json({ error: message });
+  }
+}
+
+async function handle(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;

@@ -1,14 +1,19 @@
 // Categories.tsx — three visual treatments of the same 16 categories.
 // Each card/row/cloud-item navigates to /categories/:id where id is the
 // category key without the "cat_" prefix (e.g. "expenses").
+//
+// Counts are derived from the user's real documents when authenticated;
+// fall back to the static mock counts only in demo mode.
 
 import type { CSSProperties } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import type { CategoryTreatment } from "@/types";
+import type { CategoryTreatment, Category } from "@/types";
 import { useLang } from "@/lib/i18n";
 import { ACCENT_VARS } from "@/lib/theme";
 import { CATS } from "@/lib/mock-data";
 import { numStyle } from "@/lib/utils";
+import { useDocuments } from "@/lib/useDocuments";
 import { Icon, type IconName } from "@/components/ui/Icon";
 
 interface CategoriesProps {
@@ -17,6 +22,20 @@ interface CategoriesProps {
 
 function categoryPath(key: string): string {
   return `/categories/${key.replace(/^cat_/, "")}`;
+}
+
+/** Returns the 16 categories with counts overridden by real document counts when not in mock mode. */
+function useCategoriesWithCounts(): Category[] {
+  const { documents, isMock } = useDocuments();
+  return useMemo(() => {
+    if (isMock) return CATS;
+    // Count documents per category key.
+    const counts = new Map<string, number>();
+    for (const d of documents) {
+      counts.set(d.catKey, (counts.get(d.catKey) ?? 0) + 1);
+    }
+    return CATS.map((c) => ({ ...c, count: counts.get(c.key) ?? 0 }));
+  }, [documents, isMock]);
 }
 
 export function Categories({ treatment }: CategoriesProps) {
@@ -28,9 +47,10 @@ export function Categories({ treatment }: CategoriesProps) {
 function CatGrid() {
   const { t } = useLang();
   const navigate = useNavigate();
+  const cats = useCategoriesWithCounts();
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-      {CATS.map((c, i) => {
+      {cats.map((c, i) => {
         const tintColor = ACCENT_VARS[c.tint];
         const cardStyle: CSSProperties = {
           padding: 14,
@@ -88,9 +108,10 @@ function CatGrid() {
 function CatList() {
   const { t } = useLang();
   const navigate = useNavigate();
+  const cats = useCategoriesWithCounts();
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 32px" }}>
-      {CATS.map((c, i) => {
+      {cats.map((c, i) => {
         const tintColor = ACCENT_VARS[c.tint];
         return (
           <div
@@ -137,10 +158,11 @@ function CatList() {
 function CatCloud() {
   const { t } = useLang();
   const navigate = useNavigate();
-  const max = Math.max(...CATS.map((c) => c.count));
+  const cats = useCategoriesWithCounts();
+  const max = Math.max(1, ...cats.map((c) => c.count));
   return (
     <div className="flex flex-wrap items-baseline" style={{ gap: "10px 14px", padding: "4px 2px" }}>
-      {CATS.map((c, i) => {
+      {cats.map((c, i) => {
         const scale = 0.55 + (c.count / max) * 0.8;
         const tintColor = ACCENT_VARS[c.tint];
         return (
