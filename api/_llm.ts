@@ -76,7 +76,7 @@ async function callOllama(opts: LlmCallOptions): Promise<string> {
   if (!res.ok) {
     throw new LlmError(`Ollama returned ${res.status}: ${await res.text()}`);
   }
-  const data: { choices?: Array<{ message?: { content?: string } }> } = await res.json();
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new LlmError("Ollama returned empty content.");
   return content;
@@ -112,9 +112,9 @@ async function callAnthropic(opts: LlmCallOptions): Promise<string> {
     throw new LlmError(`Anthropic returned ${res.status}: ${await res.text()}`);
   }
 
-  const data: {
+  const data = (await res.json()) as {
     content?: Array<{ type: string; text?: string }>;
-  } = await res.json();
+  };
   const text = data.content?.find((c) => c.type === "text")?.text;
   if (!text) throw new LlmError("Anthropic returned no text content.");
   return text;
