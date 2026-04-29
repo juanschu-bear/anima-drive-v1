@@ -28,6 +28,7 @@ interface LineItem {
 }
 
 interface ExtractionResult {
+  display_name?: string | null;       // human-readable title
   vendor?: string | null;
   doc_date?: string | null;          // ISO date YYYY-MM-DD
   total_amount?: number | null;
@@ -44,6 +45,7 @@ const SYSTEM_PROMPT = `You extract structured financial data from a single busin
 
 Output ONLY a JSON object matching this schema (omit fields you cannot determine, never invent):
 {
+  "display_name": string,
   "vendor": string | null,
   "doc_date": "YYYY-MM-DD" | null,
   "total_amount": number | null,
@@ -57,18 +59,37 @@ Output ONLY a JSON object matching this schema (omit fields you cannot determine
 }
 
 Rules:
+- display_name is a short human-readable title for this document, like "AWS Invoice March 2026" or "Mietvertrag Wohnung Berlin" or "Hotel Berlin Mar 12". Always provide one. Aim for 30-60 characters.
 - Numbers are bare numerics (no currency symbol).
 - Use null for unknown values; do not guess.
 - Currency is the 3-letter ISO code (default "EUR" for European invoices).
 - Total amount is the gross total the customer owes.`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  let documentId: string | undefined;
   try {
+    documentId = (req.body as { documentId?: string } | undefined)?.documentId;
     return await handle(req, res);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[extract] uncaught error:", err);
     const message = err instanceof Error ? err.message : "Internal server error";
+    // Best-effort: mark the document as failed so the UI can show an error
+    // and offer a retry. We swallow any errors from this update.
+    if (documentId) {
+      try {
+        const svc = serviceClient();
+        await svc
+          .from("ad_documents")
+          .update({
+            status: "failed",
+            error_message: message.slice(0, 500),
+          })
+          .eq("id", documentId);
+      } catch {
+        // ignore
+      }
+    }
     res.status(500).json({ error: message });
   }
 }
@@ -197,11 +218,16 @@ Return the JSON object now.`;
     }
   }
 
-  // Mark document ready.
+  // Mark document ready and persist the AI-generated display_name.
+  const displayName =
+    typeof extracted.display_name === "string" && extracted.display_name.trim().length > 0
+      ? extracted.display_name.trim().slice(0, 200)
+      : null;
   await svc
     .from("ad_documents")
     .update({
       status: "ready",
+      display_name: displayName,
       extracted_at: new Date().toISOString(),
       error_message: null,
     })

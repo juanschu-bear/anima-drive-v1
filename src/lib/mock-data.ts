@@ -10,6 +10,7 @@ export const CATS: Category[] = [
   { key: "cat_expenses",      tint: "coral", icon: "trend-down", count: 12 },
   { key: "cat_salaries",      tint: "blue",  icon: "people",     count: 6 },
   { key: "cat_rent",          tint: "amber", icon: "key",        count: 2 },
+  { key: "cat_contracts",     tint: "blue",  icon: "file",       count: 0 },
   { key: "cat_insurance",     tint: "blue",  icon: "shield",     count: 3 },
   { key: "cat_taxes",         tint: "coral", icon: "receipt",    count: 4 },
   { key: "cat_depreciation",  tint: "mint",  icon: "chart",      count: 1 },

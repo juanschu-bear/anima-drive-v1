@@ -20,7 +20,7 @@ type TranslationKey =
   | "user_name" | "subtitle_dash" | "subtitle_dash_zero"
   | "kpi_docs" | "kpi_categories" | "kpi_storage" | "kpi_of"
   | "categories" | "recent" | "activity" | "see_all"
-  | "cat_revenue" | "cat_expenses" | "cat_salaries" | "cat_rent" | "cat_insurance"
+  | "cat_revenue" | "cat_expenses" | "cat_salaries" | "cat_rent" | "cat_contracts" | "cat_insurance"
   | "cat_taxes" | "cat_depreciation" | "cat_travel" | "cat_office" | "cat_marketing"
   | "cat_software" | "cat_consulting" | "cat_vehicle" | "cat_telecom"
   | "cat_entertainment" | "cat_other"
@@ -75,7 +75,7 @@ export const TR: Record<Lang, TranslationDict> = {
     subtitle_dash_zero: "Drop your first document. I'll file the rest.",
     kpi_docs: "Total documents", kpi_categories: "Active categories", kpi_storage: "Storage used", kpi_of: "of",
     categories: "Categories", recent: "Recent uploads", activity: "Activity", see_all: "See all",
-    cat_revenue: "Revenue", cat_expenses: "Expenses", cat_salaries: "Salaries", cat_rent: "Rent",
+    cat_revenue: "Revenue", cat_expenses: "Expenses", cat_salaries: "Salaries", cat_rent: "Rent", cat_contracts: "Contracts",
     cat_insurance: "Insurance", cat_taxes: "Taxes", cat_depreciation: "Depreciation", cat_travel: "Travel",
     cat_office: "Office supplies", cat_marketing: "Marketing", cat_software: "Software & licenses",
     cat_consulting: "Consulting", cat_vehicle: "Vehicle costs", cat_telecom: "Telecoms",
@@ -147,7 +147,7 @@ export const TR: Record<Lang, TranslationDict> = {
     subtitle_dash_zero: "Wirf dein erstes Dokument rein. Den Rest mach ich.",
     kpi_docs: "Dokumente insgesamt", kpi_categories: "Aktive Kategorien", kpi_storage: "Speicher belegt", kpi_of: "von",
     categories: "Kategorien", recent: "Zuletzt hochgeladen", activity: "Aktivität", see_all: "Alle ansehen",
-    cat_revenue: "Umsatz", cat_expenses: "Ausgaben", cat_salaries: "Gehälter", cat_rent: "Miete",
+    cat_revenue: "Umsatz", cat_expenses: "Ausgaben", cat_salaries: "Gehälter", cat_rent: "Miete", cat_contracts: "Verträge",
     cat_insurance: "Versicherung", cat_taxes: "Steuern", cat_depreciation: "Abschreibung", cat_travel: "Reisen",
     cat_office: "Bürobedarf", cat_marketing: "Marketing", cat_software: "Software & Lizenzen",
     cat_consulting: "Beratung", cat_vehicle: "Fahrzeugkosten", cat_telecom: "Telekommunikation",
@@ -219,7 +219,7 @@ export const TR: Record<Lang, TranslationDict> = {
     subtitle_dash_zero: "Sube tu primer documento. Yo me ocupo del resto.",
     kpi_docs: "Documentos totales", kpi_categories: "Categorías activas", kpi_storage: "Almacenamiento usado", kpi_of: "de",
     categories: "Categorías", recent: "Subidas recientes", activity: "Actividad", see_all: "Ver todo",
-    cat_revenue: "Ingresos", cat_expenses: "Gastos", cat_salaries: "Salarios", cat_rent: "Alquiler",
+    cat_revenue: "Ingresos", cat_expenses: "Gastos", cat_salaries: "Salarios", cat_rent: "Alquiler", cat_contracts: "Contratos",
     cat_insurance: "Seguros", cat_taxes: "Impuestos", cat_depreciation: "Amortización", cat_travel: "Viajes",
     cat_office: "Oficina", cat_marketing: "Marketing", cat_software: "Software y licencias",
     cat_consulting: "Consultoría", cat_vehicle: "Vehículos", cat_telecom: "Telecom.",

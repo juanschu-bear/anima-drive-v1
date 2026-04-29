@@ -7,17 +7,28 @@ export interface AdDocumentRow {
   id: string;
   user_id: string;
   filename: string;
+  display_name: string | null;
   ext: string;
   size_bytes: number;
   storage_path: string;
   mime_type: string | null;
   category_key: string | null;
   category_confidence: number | null;
-  status: "uploaded" | "categorizing" | "extracting" | "ready" | "failed";
+  status: "uploaded" | "categorizing" | "extracting" | "ready" | "failed" | "trashed";
   error_message: string | null;
   uploaded_at: string;
   categorized_at: string | null;
   extracted_at: string | null;
+}
+
+export interface AdUserCategoryRow {
+  id: string;
+  user_id: string;
+  key: string;
+  label: string;
+  icon: string;
+  tint: string;
+  created_at: string;
 }
 
 export interface AdExtractionRow {

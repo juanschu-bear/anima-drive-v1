@@ -1,16 +1,14 @@
 // useDocuments.ts — fetches the current user's documents.
+//
 // Falls back to mock RECENT data when Supabase isn't configured or the user
 // isn't signed in (demo mode).
 //
-// The hook supports a `mode` param:
+// Modes:
 //   - "active" (default): excludes documents with status 'trashed'
 //   - "trashed": only documents with status 'trashed'
 //   - "all": everything
-//
-// Trash uses the existing `status` column (string) — we set status='trashed'
-// on soft-delete and revert to 'ready' on restore. This avoids a schema migration.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { RECENT } from "@/lib/mock-data";
@@ -42,7 +40,7 @@ function ageKeyForRow(uploadedAt: string): string {
 
 function rowToRecent(row: AdDocumentRow): RecentDoc {
   return {
-    name: row.filename,
+    name: row.display_name ?? row.filename,
     catKey: row.category_key ?? "cat_other",
     ext: row.ext,
     size: formatBytes(row.size_bytes),
@@ -64,6 +62,7 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
   const [rawDocuments, setRawDocuments] = useState<AdDocumentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     if (isMock) {
@@ -93,6 +92,31 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
     setRawDocuments(rows);
     setDocuments(rows.map(rowToRecent));
   }, [isMock, mode]);
+
+  // Auto-poll while there are docs in non-terminal states (categorizing/extracting).
+  // Polling stops automatically once everything is ready/failed/trashed.
+  useEffect(() => {
+    if (isMock) return;
+    const inFlight = rawDocuments.some(
+      (r) => r.status === "categorizing" || r.status === "extracting" || r.status === "uploaded",
+    );
+    if (!inFlight) {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      return;
+    }
+    pollTimerRef.current = setTimeout(() => {
+      refresh();
+    }, 2500);
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [rawDocuments, isMock, refresh]);
 
   useEffect(() => {
     refresh();

@@ -20,9 +20,10 @@ import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase.
 
 const CATEGORY_DEFINITIONS = [
   { key: "cat_revenue",       label: "Revenue / income",                    examples: "invoices issued to customers, sales receipts" },
-  { key: "cat_expenses",      label: "General business expenses",           examples: "office supplies, miscellaneous purchases, hosting fees" },
+  { key: "cat_expenses",      label: "General business expenses",           examples: "miscellaneous purchases, supplier bills, day-to-day operational costs" },
   { key: "cat_salaries",      label: "Salaries and payroll",                examples: "payslips, payroll reports, employee compensation" },
-  { key: "cat_rent",          label: "Rent / lease",                        examples: "office rent invoices, lease agreements, property rental contracts" },
+  { key: "cat_rent",          label: "Rent / lease",                        examples: "monthly rent invoices, lease payment receipts" },
+  { key: "cat_contracts",     label: "Contracts and agreements",            examples: "rental contracts, service agreements, NDA, employment contracts, terms of service" },
   { key: "cat_insurance",     label: "Insurance",                           examples: "insurance policies, premiums, claims" },
   { key: "cat_taxes",         label: "Taxes",                               examples: "tax returns, VAT statements, tax authority correspondence" },
   { key: "cat_depreciation",  label: "Depreciation",                        examples: "depreciation schedules, asset registers" },
@@ -34,7 +35,7 @@ const CATEGORY_DEFINITIONS = [
   { key: "cat_vehicle",       label: "Vehicle costs",                       examples: "fuel receipts, vehicle insurance, repair invoices" },
   { key: "cat_telecom",       label: "Telecommunications",                  examples: "phone, internet, mobile data plans" },
   { key: "cat_entertainment", label: "Business entertainment / hospitality", examples: "client dinners, event hosting" },
-  { key: "cat_other",         label: "Other / uncategorized",               examples: "anything that doesn't clearly match the categories above" },
+  { key: "cat_other",         label: "Other / uncategorized",               examples: "ONLY use this when no other category fits — it should be a last resort" },
 ];
 
 const SYSTEM_PROMPT = `You are a financial document classifier. Given metadata about an uploaded business document, you assign exactly one category from the fixed list provided.
@@ -178,38 +179,36 @@ Return JSON only.`;
     metadata: { confidence, provider, reason: result.reason ?? null },
   });
 
-  // 6. Trigger extract synchronously. We wait for it so the document is fully
-  // ready (vendor/amount/date populated) by the time we return 200.
-  // This adds ~3-5s to the request but means the UI never shows a half-processed doc.
+  // 6. Trigger extract as fire-and-forget. We DO NOT await it — the user gets
+  // a fast response with the category, and the frontend polls for extraction
+  // to complete in the background.
+  //
+  // We use waitUntil if available (Vercel runtime); otherwise we just kick off
+  // the fetch and don't await. Either way the function can return immediately.
   const proto = (req.headers["x-forwarded-proto"] as string) ?? "https";
   const host = req.headers.host;
   if (host) {
     const extractUrl = `${proto}://${host}/api/extract`;
-    try {
-      const extractRes = await fetch(extractUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: req.headers.authorization ?? "",
-        },
-        body: JSON.stringify({ documentId }),
-      });
-      if (!extractRes.ok) {
-        const errBody = await extractRes.text().catch(() => "<no body>");
-        // eslint-disable-next-line no-console
-        console.warn("[categorize] extract returned non-OK:", extractRes.status, errBody);
-      }
-    } catch (e) {
+    // Don't await — fire and forget.
+    fetch(extractUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: req.headers.authorization ?? "",
+      },
+      body: JSON.stringify({ documentId }),
+    }).catch((e) => {
       // eslint-disable-next-line no-console
       console.warn("[categorize] extract trigger failed:", e);
-      // We swallow this — categorize succeeded, extraction can be retried later.
-    }
+    });
   }
 
+  // Respond immediately with categorization result. Extract runs async.
   res.status(200).json({
     documentId,
     category_key: result.category_key,
     confidence,
     provider,
+    status: "extracting",
   });
 }

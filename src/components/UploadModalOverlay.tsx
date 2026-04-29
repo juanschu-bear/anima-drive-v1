@@ -20,9 +20,11 @@ interface UploadModalOverlayProps {
 
 interface UploadJob {
   id: string;
+  docId?: string;            // Set after DB row is created
   file: File;
   progress: number;          // 0..100
-  status: "queued" | "uploading" | "categorizing" | "ready" | "failed";
+  status: "queued" | "uploading" | "categorizing" | "extracting" | "ready" | "failed";
+  stage: 1 | 2 | 3;          // Visual stage indicator (1=upload, 2=categorize, 3=extract)
   error?: string;
 }
 
@@ -74,20 +76,29 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
         return;
       }
 
-      // Demo mode — fake the progress and stop.
+      // Demo mode — fake the progress through all 3 stages and stop.
       if (!configured || !user) {
-        updateJob(job.id, { status: "uploading", progress: 0 });
-        const totalSteps = 30;
-        for (let s = 1; s <= totalSteps; s++) {
+        updateJob(job.id, { status: "uploading", stage: 1, progress: 0 });
+        for (let s = 1; s <= 10; s++) {
           await new Promise((r) => setTimeout(r, 60));
-          updateJob(job.id, { progress: Math.round((s / totalSteps) * 100) });
+          updateJob(job.id, { progress: s * 10 });
+        }
+        updateJob(job.id, { status: "categorizing", stage: 2, progress: 0 });
+        for (let s = 1; s <= 10; s++) {
+          await new Promise((r) => setTimeout(r, 80));
+          updateJob(job.id, { progress: s * 10 });
+        }
+        updateJob(job.id, { status: "extracting", stage: 3, progress: 0 });
+        for (let s = 1; s <= 10; s++) {
+          await new Promise((r) => setTimeout(r, 80));
+          updateJob(job.id, { progress: s * 10 });
         }
         updateJob(job.id, { status: "ready", progress: 100 });
         return;
       }
 
-      // Real upload.
-      updateJob(job.id, { status: "uploading", progress: 5 });
+      // ── STAGE 1: Storage upload ──────────────────────────────────────
+      updateJob(job.id, { status: "uploading", stage: 1, progress: 10 });
       const docId = uuid();
       const path = `${user.id}/${docId}.${ext || "bin"}`;
 
@@ -102,7 +113,7 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
         updateJob(job.id, { status: "failed", error: storageErr.message });
         return;
       }
-      updateJob(job.id, { progress: 70 });
+      updateJob(job.id, { progress: 60, docId });
 
       // Insert document row.
       const insertPayload = {
@@ -124,14 +135,13 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
 
       if (insertErr) {
         updateJob(job.id, { status: "failed", error: insertErr.message });
-        // try to clean up the orphaned blob
         await supabase.storage.from(STORAGE_BUCKET).remove([path]).catch(() => {});
         return;
       }
+      updateJob(job.id, { progress: 100 });
 
-      updateJob(job.id, { progress: 85, status: "categorizing" });
-
-      // Kick off categorize. The Vercel function will then internally call extract.
+      // ── STAGE 2: Categorize ──────────────────────────────────────────
+      updateJob(job.id, { status: "categorizing", stage: 2, progress: 20 });
       try {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
@@ -145,20 +155,63 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
         });
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
-          throw new Error(`categorize failed: ${res.status} ${txt}`);
+          throw new Error(`categorize failed: ${res.status} ${txt.slice(0, 200)}`);
         }
-        updateJob(job.id, { progress: 100, status: "ready" });
+        updateJob(job.id, { progress: 100 });
       } catch (err) {
-        // Doc is uploaded; categorization is async-fail-tolerant.
-        // We mark the local job as ready but log the error.
         updateJob(job.id, {
-          progress: 100,
-          status: "ready",
-          error: err instanceof Error ? err.message : "Categorization queued for retry.",
+          status: "failed",
+          error: err instanceof Error ? err.message : "Categorize failed",
         });
+        await refresh();
+        return;
       }
 
-      // Refresh document list so the dashboard / browser reflect the new file.
+      // ── STAGE 3: Wait for extract (poll DB) ──────────────────────────
+      updateJob(job.id, { status: "extracting", stage: 3, progress: 10 });
+      const startedAt = Date.now();
+      const POLL_INTERVAL = 1500;
+      const POLL_TIMEOUT = 60_000; // 60s max wait
+      let pollProgress = 10;
+      while (Date.now() - startedAt < POLL_TIMEOUT) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+        const { data, error: pollErr } = await supabase
+          .from("ad_documents")
+          .select("status, error_message")
+          .eq("id", docId)
+          .maybeSingle();
+        if (pollErr) {
+          // transient — keep trying
+          continue;
+        }
+        const row = data as { status: string; error_message: string | null } | null;
+        if (!row) continue;
+        if (row.status === "ready") {
+          updateJob(job.id, { status: "ready", progress: 100 });
+          break;
+        }
+        if (row.status === "failed") {
+          updateJob(job.id, {
+            status: "failed",
+            error: row.error_message ?? "Extraction failed",
+          });
+          break;
+        }
+        // Still extracting — animate progress slowly toward 90.
+        pollProgress = Math.min(90, pollProgress + 8);
+        updateJob(job.id, { progress: pollProgress });
+      }
+      // If we exited the loop without a terminal state, mark as ready (timeout)
+      // — the user can refresh later or hit the Re-extract button.
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === job.id && j.status === "extracting"
+            ? { ...j, status: "ready", progress: 100 }
+            : j,
+        ),
+      );
+
+      // Refresh dashboard / browser doc lists.
       await refresh();
     },
     [configured, user, updateJob, refresh],
@@ -173,6 +226,7 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
         file,
         progress: 0,
         status: "queued",
+        stage: 1,
       }));
       setJobs((prev) => [...prev, ...newJobs]);
       // Process sequentially; in V2 you could parallelize.
@@ -373,64 +427,145 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
                     ? `${(j.file.size / 1024).toFixed(0)} KB`
                     : `${(j.file.size / 1024 / 1024).toFixed(1)} MB`;
 
-                const statusLabel =
-                  j.status === "queued"
-                    ? "Queued"
-                    : j.status === "uploading"
-                      ? `${Math.round(j.progress)}%`
-                      : j.status === "categorizing"
-                        ? "Categorizing…"
-                        : j.status === "ready"
-                          ? "Ready"
-                          : "Failed";
+                const stageLabels: Record<typeof j.status, string> = {
+                  queued: "Queued",
+                  uploading: "Uploading",
+                  categorizing: "Categorizing",
+                  extracting: "Extracting data",
+                  ready: "Ready",
+                  failed: j.error ?? "Failed",
+                };
+                const statusLabel = stageLabels[j.status];
 
-                const tintColor =
-                  j.status === "failed"
-                    ? "var(--ad-accent-coral)"
-                    : j.status === "ready"
-                      ? "var(--ad-accent-mint)"
-                      : "var(--ad-accent-blue)";
+                const isFailed = j.status === "failed";
+                const isReady = j.status === "ready";
+
+                // Status icon (right side)
+                const StatusIcon = () => {
+                  if (isReady) {
+                    return (
+                      <div
+                        className="flex items-center justify-center"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          background: "var(--ad-accent-mint)",
+                          color: "#09090b",
+                        }}
+                      >
+                        <Icon name="check" size={12} stroke={3} />
+                      </div>
+                    );
+                  }
+                  if (isFailed) {
+                    return (
+                      <div
+                        className="flex items-center justify-center"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          background: "var(--ad-accent-coral)",
+                          color: "#09090b",
+                        }}
+                      >
+                        <Icon name="x" size={12} stroke={3} />
+                      </div>
+                    );
+                  }
+                  // Spinner-ish indicator while in flight
+                  return (
+                    <div
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
+                        border: "2px solid color-mix(in oklab, var(--ad-accent-blue) 30%, transparent)",
+                        borderTopColor: "var(--ad-accent-blue)",
+                        animation: "spin 800ms linear infinite",
+                      }}
+                    />
+                  );
+                };
 
                 return (
                   <div
                     key={j.id}
                     style={{
-                      padding: 12,
+                      padding: 14,
                       borderRadius: 10,
                       background: "var(--ad-chip)",
                       border: "1px solid var(--ad-border)",
                     }}
                   >
-                    <div className="flex items-center" style={{ gap: 10, marginBottom: 8 }}>
+                    <div className="flex items-center" style={{ gap: 10, marginBottom: 10 }}>
                       <Icon name="file" size={14} style={{ color: "var(--ad-text-dim)" }} />
-                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{j.file.name}</div>
-                      <div style={{ fontSize: 11, color: "var(--ad-text-faint)", ...numStyle }}>
-                        {statusLabel} · {sizeLabel}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        height: 4,
-                        borderRadius: 2,
-                        background: "var(--ad-hairline)",
-                        overflow: "hidden",
-                      }}
-                    >
                       <div
                         style={{
-                          height: "100%",
-                          width: `${j.progress}%`,
-                          background:
-                            j.status === "failed"
-                              ? tintColor
-                              : "linear-gradient(90deg, var(--ad-accent-mint), var(--ad-accent-blue))",
-                          transition: "width 200ms linear",
-                          boxShadow: `0 0 8px ${tintColor}`,
+                          flex: 1,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
                         }}
+                      >
+                        {j.file.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--ad-text-faint)", ...numStyle }}>
+                        {sizeLabel}
+                      </div>
+                      <StatusIcon />
+                    </div>
+
+                    {/* 3-stage step bar */}
+                    <div className="flex items-center" style={{ gap: 6, marginBottom: 8 }}>
+                      <StepBar
+                        label="Upload"
+                        active={j.stage === 1}
+                        completed={j.stage > 1 || isReady}
+                        failed={isFailed && j.stage === 1}
+                        progress={j.stage === 1 ? j.progress : 100}
+                      />
+                      <StepBar
+                        label="Categorize"
+                        active={j.stage === 2}
+                        completed={j.stage > 2 || isReady}
+                        failed={isFailed && j.stage === 2}
+                        progress={j.stage === 2 ? j.progress : j.stage > 2 ? 100 : 0}
+                      />
+                      <StepBar
+                        label="Extract"
+                        active={j.stage === 3 && !isReady}
+                        completed={isReady}
+                        failed={isFailed && j.stage === 3}
+                        progress={j.stage === 3 ? j.progress : isReady ? 100 : 0}
                       />
                     </div>
+
+                    {/* Status text */}
+                    <div
+                      className="flex items-center justify-between"
+                      style={{ fontSize: 11, color: "var(--ad-text-dim)" }}
+                    >
+                      <span>{statusLabel}</span>
+                      {!isReady && !isFailed && (
+                        <span style={{ ...numStyle }}>
+                          Stage {j.stage}/3
+                        </span>
+                      )}
+                    </div>
+
                     {j.error && (
-                      <div style={{ fontSize: 11, color: "var(--ad-accent-coral)", marginTop: 6 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--ad-accent-coral)",
+                          marginTop: 6,
+                          wordBreak: "break-word",
+                        }}
+                      >
                         {j.error}
                       </div>
                     )}
@@ -478,6 +613,51 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
           </div>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+interface StepBarProps {
+  label: string;
+  active: boolean;
+  completed: boolean;
+  failed: boolean;
+  progress: number;
+}
+
+function StepBar({ active, completed, failed, progress }: StepBarProps) {
+  const bg = failed
+    ? "var(--ad-accent-coral)"
+    : completed
+      ? "var(--ad-accent-mint)"
+      : active
+        ? "linear-gradient(90deg, var(--ad-accent-mint), var(--ad-accent-blue))"
+        : "var(--ad-hairline)";
+  const width = completed ? 100 : active ? Math.max(8, Math.min(100, progress)) : 0;
+  return (
+    <div
+      style={{
+        flex: 1,
+        height: 5,
+        borderRadius: 3,
+        background: "var(--ad-hairline)",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: `${width}%`,
+          background: bg,
+          borderRadius: 3,
+          transition: "width 220ms ease-out",
+          boxShadow: active || completed
+            ? "0 0 8px color-mix(in oklab, var(--ad-accent-blue) 40%, transparent)"
+            : "none",
+        }}
+      />
     </div>
   );
 }
