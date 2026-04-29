@@ -15,6 +15,8 @@ export interface Category {
 }
 
 export interface RecentDoc {
+  documentId?: string;
+  originalFilename?: string;
   name: string;
   catKey: string;
   ext: string;

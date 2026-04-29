@@ -50,7 +50,11 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
     }
     if (!isAuth) return;
     const match = rawDocuments
-      .filter((r) => r.filename === doc.name)
+      .filter((r) => {
+        if (doc.documentId && r.id === doc.documentId) return true;
+        if (doc.originalFilename && r.filename === doc.originalFilename) return true;
+        return r.display_name === doc.name || r.filename === doc.name;
+      })
       .sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at))[0];
     setDocRow(match ?? null);
   }, [doc, rawDocuments, isAuth]);
@@ -134,7 +138,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
     // Trigger a download by creating an anchor with download attr.
     const a = document.createElement("a");
     a.href = url;
-    a.download = doc.name;
+    a.download = docRow?.filename ?? doc.originalFilename ?? doc.name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

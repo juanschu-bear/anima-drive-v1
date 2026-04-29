@@ -40,6 +40,8 @@ function ageKeyForRow(uploadedAt: string): string {
 
 function rowToRecent(row: AdDocumentRow): RecentDoc {
   return {
+    documentId: row.id,
+    originalFilename: row.filename,
     name: row.display_name ?? row.filename,
     catKey: row.category_key ?? "cat_other",
     ext: row.ext,
