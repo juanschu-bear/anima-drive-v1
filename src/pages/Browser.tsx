@@ -10,6 +10,7 @@ import { CATS, RECENT, findCategory } from "@/lib/mock-data";
 import { numStyle } from "@/lib/utils";
 import { useDocumentDetail } from "@/lib/document-detail";
 import { useCommandPalette } from "@/lib/command-palette";
+import { useDocuments } from "@/lib/useDocuments";
 import { Sidebar } from "@/components/Sidebar";
 import { Panel } from "@/components/ui/Panel";
 import { Orbs } from "@/components/ui/Orbs";
@@ -28,15 +29,17 @@ export function Browser({ sidebarState = "expanded" }: BrowserProps) {
   const { t } = useLang();
   const { openDoc } = useDocumentDetail();
   const { open: openSearch } = useCommandPalette();
+  const { documents, isMock } = useDocuments();
   const [view, setView] = useState<ViewMode>("grid");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const collapsed = sidebarState === "collapsed";
 
-  // Same trick as the original: duplicate the recent docs to fill the grid/list.
-  const allDocs = useMemo(
-    () => [...RECENT, ...RECENT].map((d, i) => ({ ...d, id: i })),
-    [],
-  );
+  // In demo mode keep the polished mid-fi grid (duplicated RECENT to fill).
+  // In auth mode use the user's actual documents.
+  const allDocs = useMemo(() => {
+    if (isMock) return [...RECENT, ...RECENT].map((d, i) => ({ ...d, id: i }));
+    return documents.map((d, i) => ({ ...d, id: i }));
+  }, [documents, isMock]);
 
   const docs = useMemo(
     () => (activeFilter ? allDocs.filter((d) => d.catKey === activeFilter) : allDocs),
@@ -195,6 +198,7 @@ export function Browser({ sidebarState = "expanded" }: BrowserProps) {
             {CATS.slice(0, 7).map((c) => {
               const tintColor = ACCENT_VARS[c.tint];
               const isActive = activeFilter === c.key;
+              const count = isMock ? c.count : allDocs.filter((d) => d.catKey === c.key).length;
               return (
                 <div
                   key={c.key}
@@ -217,7 +221,7 @@ export function Browser({ sidebarState = "expanded" }: BrowserProps) {
                 >
                   <Icon name={c.icon as IconName} size={11} style={{ color: tintColor }} />
                   {t(c.key)}{" "}
-                  <span style={{ color: "var(--ad-text-faint)", ...numStyle }}>{c.count}</span>
+                  <span style={{ color: "var(--ad-text-faint)", ...numStyle }}>{count}</span>
                 </div>
               );
             })}
@@ -235,7 +239,38 @@ export function Browser({ sidebarState = "expanded" }: BrowserProps) {
           </div>
 
           {/* Content */}
-          {view === "grid" ? (
+          {!isMock && docs.length === 0 ? (
+            <div
+              className="flex flex-col items-center justify-center"
+              style={{
+                flex: 1,
+                gap: 12,
+                padding: 60,
+                textAlign: "center",
+              }}
+            >
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  background: "color-mix(in oklab, var(--ad-accent-mint) 12%, transparent)",
+                  color: "var(--ad-accent-mint)",
+                }}
+              >
+                <Icon name="upload" size={22} stroke={1.6} />
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 500 }}>
+                {activeFilter ? "No documents in this filter" : "No documents yet"}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--ad-text-dim)", maxWidth: 320 }}>
+                {activeFilter
+                  ? "Try clearing the filter or upload a document for this category."
+                  : "Drop your first document and Anima will file the rest."}
+              </div>
+            </div>
+          ) : view === "grid" ? (
             <div
               style={{
                 display: "grid",
