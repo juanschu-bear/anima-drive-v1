@@ -1,24 +1,49 @@
-// api/extract.ts — extracts structured data from a document.
+// api/extract.ts — universal document extraction.
+//
+// Supports ANY kind of document, not just financial.
 //
 // Flow:
 //   1. Authenticate, fetch doc.
-//   2. Generate signed URL for the file in storage.
-//   3. Ask LLM to extract { vendor, doc_date, total_amount, currency,
-//      vat_amount, vat_rate, invoice_number, due_date, payment_terms,
-//      line_items[] } as JSON.
-//      - For images, we pass the signed URL so a vision-capable model can see it.
-//      - For PDFs and others, we use filename heuristics in V1 (vision PDF
-//        support is uneven across LLMs); a follow-up can run pdf-parse here.
-//   4. Insert ad_extractions row + ad_line_items rows.
-//   5. Update document status to 'ready'.
-//   6. Insert activity entry.
+//   2. Generate a signed URL for the file in storage.
+//   3. If the file is an image, fetch it and base64-encode it so we can pass
+//      it to a vision-capable LLM (Anthropic Haiku). For PDFs/other we work
+//      with filename + mime + category metadata; vision PDF support will land
+//      in a follow-up.
+//   4. Ask the LLM to:
+//        a) classify document_type ('financial' | 'contract' | 'legal' |
+//           'medical' | 'educational' | 'technical' | 'correspondence' |
+//           'personal' | 'media' | 'other')
+//        b) always produce a display_name and a one-paragraph summary
+//        c) for financial docs, fill the legacy fields (vendor, total, date,
+//           VAT, line items)
+//        d) for other types, fill type-specific fields into a `metadata`
+//           jsonb object
+//   5. Persist into ad_extractions (+ ad_line_items for financial).
+//   6. Update the document row: status='ready', display_name set.
+//   7. Activity entry.
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { llmCall, parseJsonResponse } from "./_llm.js";
+import { llmCall, parseJsonResponse, type LlmContent } from "./_llm.js";
 import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase.js";
 
 const STORAGE_BUCKET = "ad-docs";
 const SIGNED_URL_TTL_SEC = 60 * 5;
+
+// ─────────────────────────────────────────────────────────────────────
+// Result schema
+// ─────────────────────────────────────────────────────────────────────
+
+type DocumentType =
+  | "financial"
+  | "contract"
+  | "legal"
+  | "medical"
+  | "educational"
+  | "technical"
+  | "correspondence"
+  | "personal"
+  | "media"
+  | "other";
 
 interface LineItem {
   description: string;
@@ -28,42 +53,77 @@ interface LineItem {
 }
 
 interface ExtractionResult {
-  display_name?: string | null;       // human-readable title
+  display_name: string;
+  document_type: DocumentType;
+  summary: string;
+
+  // Financial-only fields
   vendor?: string | null;
-  doc_date?: string | null;          // ISO date YYYY-MM-DD
+  doc_date?: string | null; // ISO YYYY-MM-DD
   total_amount?: number | null;
-  currency?: string | null;          // ISO 4217 (EUR, USD, …)
+  currency?: string | null;
   vat_amount?: number | null;
   vat_rate?: number | null;
   invoice_number?: string | null;
   due_date?: string | null;
   payment_terms?: string | null;
   line_items?: LineItem[];
+
+  // Type-specific structured fields (jsonb)
+  metadata?: Record<string, unknown> | null;
 }
 
-const SYSTEM_PROMPT = `You extract structured financial data from a single business document.
+// ─────────────────────────────────────────────────────────────────────
+// Prompt
+// ─────────────────────────────────────────────────────────────────────
 
-Output ONLY a JSON object matching this schema (omit fields you cannot determine, never invent):
+const SYSTEM_PROMPT = `You are Anima, a universal document extractor. You analyze documents of ANY kind — invoices, contracts, letters, medical records, technical specs, IDs, photos of receipts, screenshots — and extract structured data from them.
+
+Output ONLY a JSON object. No prose, no code fences, just the JSON.
+
+Schema:
 {
-  "display_name": string,
+  "display_name": string,                  // REQUIRED. Short human-readable title (30-80 chars). E.g. "AWS Invoice March 2026", "Mietvertrag Wohnung Berlin", "Hotel Berlin Mar 12 Receipt", "Codex Video Analysis Spec v2".
+  "document_type": "financial" | "contract" | "legal" | "medical" | "educational" | "technical" | "correspondence" | "personal" | "media" | "other",  // REQUIRED.
+  "summary": string,                       // REQUIRED. One paragraph (2-4 sentences) describing what this document is and contains, in the same language as the document.
+
+  // FINANCIAL fields — fill these ONLY when document_type === "financial":
   "vendor": string | null,
   "doc_date": "YYYY-MM-DD" | null,
-  "total_amount": number | null,
+  "total_amount": number | null,           // bare number, no currency symbol
   "currency": "EUR" | "USD" | "GBP" | "CHF" | string | null,
   "vat_amount": number | null,
   "vat_rate": number | null,
   "invoice_number": string | null,
   "due_date": "YYYY-MM-DD" | null,
   "payment_terms": string | null,
-  "line_items": [{"description": string, "quantity": number | null, "unit_price": number | null, "amount": number}]
+  "line_items": [{"description": string, "quantity": number | null, "unit_price": number | null, "amount": number}],
+
+  // METADATA — type-specific structured fields. Schema varies by document_type:
+  "metadata": {
+    // For "contract":         {parties: string[], contract_type: string, effective_date: "YYYY-MM-DD" | null, key_terms: string[]}
+    // For "legal":             {parties: string[], case_or_reference: string | null, court_or_authority: string | null, key_points: string[]}
+    // For "medical":           {patient_name: string | null, doctor: string | null, date: "YYYY-MM-DD" | null, diagnosis_or_topic: string | null, prescription: string | null}
+    // For "educational":       {institution: string | null, student_name: string | null, document_kind: string, date: "YYYY-MM-DD" | null, grade_or_outcome: string | null}
+    // For "technical":         {title: string, topics: string[], language: string | null, key_concepts: string[]}
+    // For "correspondence":    {from: string | null, to: string | null, subject: string | null, date: "YYYY-MM-DD" | null}
+    // For "personal":          {document_kind: string, full_name: string | null, identifier: string | null, valid_until: "YYYY-MM-DD" | null}
+    // For "media":             {description: string, detected_objects: string[]}
+    // For "other":             {key_facts: string[]}
+  }
 }
 
 Rules:
-- display_name is a short human-readable title for this document, like "AWS Invoice March 2026" or "Mietvertrag Wohnung Berlin" or "Hotel Berlin Mar 12". Always provide one. Aim for 30-60 characters.
+- ALWAYS output display_name, document_type, and summary. They must never be missing.
+- Use null (not empty string) for unknown values.
+- For images, READ the document — describe what is actually there, do not invent.
+- For non-image documents (PDF without vision support), make a best guess from filename and any context provided. If you genuinely cannot tell, set document_type="other" and explain in the summary.
 - Numbers are bare numerics (no currency symbol).
-- Use null for unknown values; do not guess.
-- Currency is the 3-letter ISO code (default "EUR" for European invoices).
-- Total amount is the gross total the customer owes.`;
+- The summary should be useful — what would a human want to remember about this document later?`;
+
+// ─────────────────────────────────────────────────────────────────────
+// Handler
+// ─────────────────────────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let documentId: string | undefined;
@@ -74,8 +134,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // eslint-disable-next-line no-console
     console.error("[extract] uncaught error:", err);
     const message = err instanceof Error ? err.message : "Internal server error";
-    // Best-effort: mark the document as failed so the UI can show an error
-    // and offer a retry. We swallow any errors from this update.
     if (documentId) {
       try {
         const svc = serviceClient();
@@ -128,7 +186,7 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Generate a short-lived signed URL so the LLM (or follow-up tools) can read the file.
+  // ── Sign URL ────────────────────────────────────────────────────────
   const { data: signed, error: signErr } = await svc.storage
     .from(STORAGE_BUCKET)
     .createSignedUrl(doc.storage_path, SIGNED_URL_TTL_SEC);
@@ -137,24 +195,46 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const userPrompt = `Document:
-- filename: ${doc.filename}
-- file extension: ${doc.ext}
-- mime type: ${doc.mime_type ?? "unknown"}
-- assigned category: ${doc.category_key ?? "unknown"}
-- signed URL (valid 5 min): ${signed.signedUrl}
+  // ── Build the LLM messages ──────────────────────────────────────────
+  // Send images and PDFs to Anthropic Vision so it actually reads the document.
+  // We pass the Supabase Signed URL directly — Anthropic fetches the file
+  // server-side, which sidesteps Vercel's request body size limits entirely.
+  // Other formats (Word, Excel, eml, csv) fall back to text-only context for now.
+  const isImage = isImageMime(doc.mime_type, doc.ext);
+  const isPdf = isPdfMime(doc.mime_type, doc.ext);
+  let userContent: string | LlmContent[];
+  if (isImage) {
+    const textBlock: LlmContent = {
+      type: "text",
+      text: buildContextPrompt(doc),
+    };
+    const imageBlock: LlmContent = {
+      type: "image_url",
+      url: signed.signedUrl,
+    };
+    userContent = [textBlock, imageBlock];
+  } else if (isPdf) {
+    const textBlock: LlmContent = {
+      type: "text",
+      text: buildContextPrompt(doc),
+    };
+    const pdfBlock: LlmContent = {
+      type: "document_url",
+      url: signed.signedUrl,
+    };
+    userContent = [textBlock, pdfBlock];
+  } else {
+    userContent = buildContextPrompt(doc);
+  }
 
-If the URL points to an image you can fetch, use it to read the document. Otherwise infer what you can from the filename and category.
-
-Return the JSON object now.`;
-
+  // ── Call LLM ────────────────────────────────────────────────────────
   let extracted: ExtractionResult;
   let provider: string;
   try {
     const llm = await llmCall({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
+        { role: "user", content: userContent },
       ],
       json: true,
       temperature: 0.1,
@@ -172,9 +252,17 @@ Return the JSON object now.`;
     return;
   }
 
-  // Insert extraction row (one per document).
+  // ── Validate and normalize ─────────────────────────────────────────
+  const docType = normalizeDocType(extracted.document_type);
+  const displayName = (extracted.display_name ?? "").trim().slice(0, 200) || doc.filename;
+  const summary = (extracted.summary ?? "").trim();
+
+  // ── Persist ad_extractions ──────────────────────────────────────────
   const extractionRow = {
     document_id: documentId,
+    document_type: docType,
+    summary: summary || null,
+    metadata: extracted.metadata ?? null,
     vendor: extracted.vendor ?? null,
     doc_date: extracted.doc_date ?? null,
     total_amount: extracted.total_amount ?? null,
@@ -187,7 +275,6 @@ Return the JSON object now.`;
     raw_extraction: extracted as unknown,
   };
 
-  // Upsert by document_id (we have a unique index there).
   const { data: extractionInserted, error: extractionErr } = await svc
     .from("ad_extractions")
     .upsert(extractionRow, { onConflict: "document_id" })
@@ -200,9 +287,9 @@ Return the JSON object now.`;
   }
   const extractionId = (extractionInserted as { id: string }).id;
 
-  // Wipe old line items, insert new ones.
+  // ── Line items (only for financial) ─────────────────────────────────
   await svc.from("ad_line_items").delete().eq("extraction_id", extractionId);
-  if (extracted.line_items && extracted.line_items.length > 0) {
+  if (docType === "financial" && extracted.line_items && extracted.line_items.length > 0) {
     const rows = extracted.line_items
       .filter((li) => li && typeof li.description === "string" && Number.isFinite(li.amount))
       .map((li, idx) => ({
@@ -218,11 +305,7 @@ Return the JSON object now.`;
     }
   }
 
-  // Mark document ready and persist the AI-generated display_name.
-  const displayName =
-    typeof extracted.display_name === "string" && extracted.display_name.trim().length > 0
-      ? extracted.display_name.trim().slice(0, 200)
-      : null;
+  // ── Mark doc ready + display_name ───────────────────────────────────
   await svc
     .from("ad_documents")
     .update({
@@ -233,25 +316,70 @@ Return the JSON object now.`;
     })
     .eq("id", documentId);
 
-  // Activity entry.
+  // ── Activity entry ──────────────────────────────────────────────────
   await svc.from("ad_activities").insert({
     user_id: user.id,
     document_id: documentId,
     type: "extracted",
-    message: `Extracted data from ${doc.filename}${extracted.vendor ? ` (${extracted.vendor})` : ""}`,
-    metadata: {
-      provider,
-      total: extracted.total_amount,
-      currency: extracted.currency ?? "EUR",
-    },
+    message: `Extracted ${docType} document: ${displayName}`,
+    metadata: { provider, document_type: docType },
   });
 
   res.status(200).json({
     documentId,
     extractionId,
-    vendor: extracted.vendor,
-    total_amount: extracted.total_amount,
-    currency: extracted.currency,
+    document_type: docType,
+    display_name: displayName,
     provider,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
+
+function isImageMime(mime: string | null, ext: string): boolean {
+  if (mime?.startsWith("image/")) return true;
+  const e = ext?.toLowerCase();
+  return e === "jpg" || e === "jpeg" || e === "png" || e === "gif" || e === "webp";
+}
+
+function isPdfMime(mime: string | null, ext: string): boolean {
+  if (mime === "application/pdf") return true;
+  return ext?.toLowerCase() === "pdf";
+}
+
+interface DocLite {
+  filename: string;
+  ext: string;
+  mime_type: string | null;
+  category_key: string | null;
+}
+
+function buildContextPrompt(doc: DocLite): string {
+  return `Document context:
+- filename: ${doc.filename}
+- extension: ${doc.ext}
+- mime type: ${doc.mime_type ?? "unknown"}
+- preliminary category: ${doc.category_key ?? "none"}
+
+Analyze this document and return the JSON object now.`;
+}
+
+function normalizeDocType(t: string | undefined): DocumentType {
+  const allowed: DocumentType[] = [
+    "financial",
+    "contract",
+    "legal",
+    "medical",
+    "educational",
+    "technical",
+    "correspondence",
+    "personal",
+    "media",
+    "other",
+  ];
+  const v = (t ?? "").toLowerCase();
+  if (allowed.includes(v as DocumentType)) return v as DocumentType;
+  return "other";
 }

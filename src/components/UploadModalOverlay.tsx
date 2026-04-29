@@ -29,7 +29,7 @@ interface UploadJob {
 }
 
 const ACCEPTED_EXT = ["pdf", "jpg", "jpeg", "png", "csv", "xlsx", "eml"];
-const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_BYTES = 100 * 1024 * 1024;
 
 function fileExt(name: string): string {
   const i = name.lastIndexOf(".");
@@ -68,7 +68,7 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
     async (job: UploadJob) => {
       const ext = fileExt(job.file.name);
       if (job.file.size > MAX_BYTES) {
-        updateJob(job.id, { status: "failed", error: "File exceeds 25 MB limit." });
+        updateJob(job.id, { status: "failed", error: "File exceeds 100 MB limit." });
         return;
       }
       if (ext && !ACCEPTED_EXT.includes(ext)) {

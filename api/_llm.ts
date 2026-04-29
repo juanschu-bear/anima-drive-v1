@@ -11,9 +11,48 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
 const ANTHROPIC_VERSION = "2023-06-01";
 
+export interface LlmTextContent {
+  type: "text";
+  text: string;
+}
+
+export interface LlmImageContent {
+  type: "image";
+  /** Base64-encoded image data (no data:... prefix). */
+  base64: string;
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+}
+
+export interface LlmImageUrlContent {
+  type: "image_url";
+  /** Publicly fetchable URL — Anthropic will fetch it server-side. */
+  url: string;
+}
+
+export interface LlmDocumentContent {
+  type: "document";
+  /** Base64-encoded PDF data (no data:... prefix). */
+  base64: string;
+  mediaType: "application/pdf";
+}
+
+export interface LlmDocumentUrlContent {
+  type: "document_url";
+  /** Publicly fetchable PDF URL — Anthropic will fetch it server-side. */
+  url: string;
+}
+
+export type LlmContent =
+  | LlmTextContent
+  | LlmImageContent
+  | LlmImageUrlContent
+  | LlmDocumentContent
+  | LlmDocumentUrlContent;
+
 export interface LlmMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  /** String for plain text, or an array for multimodal (text+image). */
+  content: string | LlmContent[];
 }
 
 export interface LlmCallOptions {
@@ -38,6 +77,28 @@ class LlmError extends Error {
   }
 }
 
+function hasBinaryContent(messages: LlmMessage[]): boolean {
+  return messages.some(
+    (m) =>
+      Array.isArray(m.content) &&
+      m.content.some(
+        (c) =>
+          c.type === "image" ||
+          c.type === "image_url" ||
+          c.type === "document" ||
+          c.type === "document_url",
+      ),
+  );
+}
+
+function plainTextContent(content: string | LlmContent[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((c): c is LlmTextContent => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
+}
+
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -51,9 +112,17 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 async function callOllama(opts: LlmCallOptions): Promise<string> {
+  // Ollama OpenAI-compat doesn't reliably handle image content arrays in this setup.
+  // If images are present we send the text part only; the caller's logic should
+  // decide whether to skip Ollama. Here we strip images defensively.
+  const textOnlyMessages = opts.messages.map((m) => ({
+    role: m.role,
+    content: plainTextContent(m.content),
+  }));
+
   const body: Record<string, unknown> = {
     model: OLLAMA_MODEL,
-    messages: opts.messages,
+    messages: textOnlyMessages,
     stream: false,
     temperature: opts.temperature ?? 0.2,
   };
@@ -90,12 +159,62 @@ async function callAnthropic(opts: LlmCallOptions): Promise<string> {
   const systemMsg = opts.messages.find((m) => m.role === "system");
   const others = opts.messages.filter((m) => m.role !== "system");
 
+  // Convert our internal LlmContent[] to Anthropic's content blocks.
+  const anthropicMessages = others.map((m) => {
+    if (typeof m.content === "string") {
+      return { role: m.role, content: m.content };
+    }
+    const blocks = m.content.map((c) => {
+      if (c.type === "text") {
+        return { type: "text" as const, text: c.text };
+      }
+      if (c.type === "image") {
+        return {
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: c.mediaType,
+            data: c.base64,
+          },
+        };
+      }
+      if (c.type === "image_url") {
+        return {
+          type: "image" as const,
+          source: {
+            type: "url" as const,
+            url: c.url,
+          },
+        };
+      }
+      if (c.type === "document_url") {
+        return {
+          type: "document" as const,
+          source: {
+            type: "url" as const,
+            url: c.url,
+          },
+        };
+      }
+      // document (base64 PDF)
+      return {
+        type: "document" as const,
+        source: {
+          type: "base64" as const,
+          media_type: c.mediaType,
+          data: c.base64,
+        },
+      };
+    });
+    return { role: m.role, content: blocks };
+  });
+
   const body = {
     model: ANTHROPIC_MODEL,
     max_tokens: opts.maxTokens ?? 2048,
     temperature: opts.temperature ?? 0.2,
-    ...(systemMsg ? { system: systemMsg.content } : {}),
-    messages: others.map((m) => ({ role: m.role, content: m.content })),
+    ...(systemMsg ? { system: plainTextContent(systemMsg.content) } : {}),
+    messages: anthropicMessages,
   };
 
   const res = await fetch(ANTHROPIC_URL, {
@@ -121,7 +240,14 @@ async function callAnthropic(opts: LlmCallOptions): Promise<string> {
 }
 
 export async function llmCall(opts: LlmCallOptions): Promise<LlmCallResult> {
-  // Try Ollama first.
+  // Vision/document content goes straight to Anthropic — Ollama in our setup
+  // is text-only and would just hallucinate without seeing the file.
+  if (hasBinaryContent(opts.messages)) {
+    const text = await callAnthropic(opts);
+    return { text, provider: "anthropic" };
+  }
+
+  // Text-only: try Ollama first, fall back to Anthropic.
   try {
     const text = await callOllama(opts);
     return { text, provider: "ollama" };
