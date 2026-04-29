@@ -142,9 +142,9 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
 
       // ── STAGE 2: Categorize ──────────────────────────────────────────
       updateJob(job.id, { status: "categorizing", stage: 2, progress: 20 });
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
       try {
-        const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token;
         const res = await fetch("/api/categorize", {
           method: "POST",
           headers: {
@@ -167,49 +167,31 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
         return;
       }
 
-      // ── STAGE 3: Wait for extract (poll DB) ──────────────────────────
-      updateJob(job.id, { status: "extracting", stage: 3, progress: 10 });
-      const startedAt = Date.now();
-      const POLL_INTERVAL = 1500;
-      const POLL_TIMEOUT = 60_000; // 60s max wait
-      let pollProgress = 10;
-      while (Date.now() - startedAt < POLL_TIMEOUT) {
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
-        const { data, error: pollErr } = await supabase
-          .from("ad_documents")
-          .select("status, error_message")
-          .eq("id", docId)
-          .maybeSingle();
-        if (pollErr) {
-          // transient — keep trying
-          continue;
+      // ── STAGE 3: Extract (called directly from frontend) ─────────────
+      // We trigger /api/extract from the frontend instead of having
+      // /api/categorize trigger it internally — Vercel kills fire-and-forget
+      // promises after res.json() returns, so internal triggers never execute.
+      updateJob(job.id, { status: "extracting", stage: 3, progress: 20 });
+      try {
+        const res = await fetch("/api/extract", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ documentId: docId }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`extract failed: ${res.status} ${txt.slice(0, 200)}`);
         }
-        const row = data as { status: string; error_message: string | null } | null;
-        if (!row) continue;
-        if (row.status === "ready") {
-          updateJob(job.id, { status: "ready", progress: 100 });
-          break;
-        }
-        if (row.status === "failed") {
-          updateJob(job.id, {
-            status: "failed",
-            error: row.error_message ?? "Extraction failed",
-          });
-          break;
-        }
-        // Still extracting — animate progress slowly toward 90.
-        pollProgress = Math.min(90, pollProgress + 8);
-        updateJob(job.id, { progress: pollProgress });
+        updateJob(job.id, { status: "ready", progress: 100 });
+      } catch (err) {
+        updateJob(job.id, {
+          status: "failed",
+          error: err instanceof Error ? err.message : "Extract failed",
+        });
       }
-      // If we exited the loop without a terminal state, mark as ready (timeout)
-      // — the user can refresh later or hit the Re-extract button.
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === job.id && j.status === "extracting"
-            ? { ...j, status: "ready", progress: 100 }
-            : j,
-        ),
-      );
 
       // Refresh dashboard / browser doc lists.
       await refresh();

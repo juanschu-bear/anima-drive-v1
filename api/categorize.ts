@@ -179,31 +179,11 @@ Return JSON only.`;
     metadata: { confidence, provider, reason: result.reason ?? null },
   });
 
-  // 6. Trigger extract as fire-and-forget. We DO NOT await it — the user gets
-  // a fast response with the category, and the frontend polls for extraction
-  // to complete in the background.
-  //
-  // We use waitUntil if available (Vercel runtime); otherwise we just kick off
-  // the fetch and don't await. Either way the function can return immediately.
-  const proto = (req.headers["x-forwarded-proto"] as string) ?? "https";
-  const host = req.headers.host;
-  if (host) {
-    const extractUrl = `${proto}://${host}/api/extract`;
-    // Don't await — fire and forget.
-    fetch(extractUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: req.headers.authorization ?? "",
-      },
-      body: JSON.stringify({ documentId }),
-    }).catch((e) => {
-      // eslint-disable-next-line no-console
-      console.warn("[categorize] extract trigger failed:", e);
-    });
-  }
-
-  // Respond immediately with categorization result. Extract runs async.
+  // 6. Respond immediately with categorization result.
+  // Extract is triggered separately by the frontend (see UploadModalOverlay).
+  // We deliberately do NOT call /api/extract from here, because Vercel kills
+  // pending fire-and-forget promises as soon as res.json() returns, which
+  // would cause Extract to never actually run.
   res.status(200).json({
     documentId,
     category_key: result.category_key,
