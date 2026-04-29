@@ -106,7 +106,7 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
             minWidth: 0,
             padding: "28px 28px 24px",
             gap: 20,
-            overflow: "hidden",
+            overflow: "auto",
           }}
         >
           {/* Header */}

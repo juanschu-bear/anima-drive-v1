@@ -37,7 +37,8 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
 
   const [extraction, setExtraction] = useState<AdExtractionRow | null>(null);
   const [lineItems, setLineItems] = useState<AdLineItemRow[]>([]);
-  const [busy, setBusy] = useState<"open" | "download" | "trash" | null>(null);
+  const [busy, setBusy] = useState<"open" | "download" | "trash" | "extract" | null>(null);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const [docRow, setDocRow] = useState<AdDocumentRow | null>(null);
 
   // Resolve the matching DB row from the displayed RecentDoc by filename.
@@ -139,6 +140,53 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
     document.body.removeChild(a);
   }
 
+  async function onReExtract() {
+    if (!docRow) return;
+    setBusy("extract");
+    setExtractError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setExtractError("Not signed in");
+        return;
+      }
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ documentId: docRow.id }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        setExtractError(`Extraction failed: ${res.status} ${errText.slice(0, 200)}`);
+        return;
+      }
+      // Re-fetch the extraction now that it should exist.
+      const extRes = await supabase
+        .from("ad_extractions")
+        .select("*")
+        .eq("document_id", docRow.id)
+        .maybeSingle();
+      const ext = (extRes.data as AdExtractionRow | null) ?? null;
+      setExtraction(ext);
+      if (ext) {
+        const liRes = await supabase
+          .from("ad_line_items")
+          .select("*")
+          .eq("extraction_id", ext.id)
+          .order("position");
+        setLineItems(((liRes.data ?? []) as AdLineItemRow[]) ?? []);
+      }
+    } catch (e) {
+      setExtractError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function onTrash() {
     if (!docRow) return;
     setBusy("trash");
@@ -148,25 +196,13 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
     onClose();
   }
 
-  const fmtAmount = (amount: number | null, currency: string | null): string => {
-    if (amount == null) return "—";
-    const cur = currency ?? "EUR";
-    try {
-      return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format(amount);
-    } catch {
-      return `${amount.toFixed(2)} ${cur}`;
-    }
-  };
-
-  const fmtDate = (s: string | null): string => {
-    if (!s) return "—";
-    const d = new Date(s);
-    if (isNaN(d.getTime())) return s;
-    return d.toLocaleDateString();
-  };
-
   const hasExtraction =
-    extraction != null && (extraction.vendor || extraction.total_amount != null || extraction.doc_date);
+    extraction != null &&
+    (extraction.summary ||
+      extraction.vendor ||
+      extraction.total_amount != null ||
+      extraction.doc_date ||
+      (extraction.metadata && Object.keys(extraction.metadata).length > 0));
 
   return (
     <div style={overlayStyle}>
@@ -294,68 +330,77 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
           }}
         >
           <div
+            className="flex items-center justify-between"
             style={{
-              fontSize: 10,
-              color: "var(--ad-text-faint)",
-              letterSpacing: 0.8,
-              textTransform: "uppercase",
-              fontWeight: 600,
               marginBottom: 10,
             }}
           >
-            Extracted data
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--ad-text-faint)",
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+                fontWeight: 600,
+              }}
+            >
+              Extracted data
+            </div>
+            {extraction?.document_type && (
+              <div
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 0.5,
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                  color: "var(--ad-text-dim)",
+                  background: "var(--ad-bg)",
+                  padding: "3px 8px",
+                  borderRadius: 5,
+                  border: "1px solid var(--ad-border)",
+                }}
+              >
+                {extraction.document_type}
+              </div>
+            )}
           </div>
           {hasExtraction && extraction ? (
-            <div style={{ display: "grid", gap: 8 }}>
-              <KV label="Vendor" value={extraction.vendor ?? "—"} />
-              <KV
-                label="Total"
-                value={fmtAmount(extraction.total_amount, extraction.currency)}
-              />
-              <KV label="Date" value={fmtDate(extraction.doc_date)} />
-              {lineItems.length > 0 && (
-                <div style={{ marginTop: 6 }}>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "var(--ad-text-faint)",
-                      letterSpacing: 0.8,
-                      textTransform: "uppercase",
-                      fontWeight: 600,
-                      marginBottom: 6,
-                    }}
-                  >
-                    Line items
-                  </div>
-                  <div style={{ display: "grid", gap: 4 }}>
-                    {lineItems.slice(0, 8).map((li) => (
-                      <div
-                        key={li.id}
-                        className="flex items-center justify-between"
-                        style={{ fontSize: 12, color: "var(--ad-text-dim)" }}
-                      >
-                        <span style={{ flex: 1, marginRight: 8 }}>
-                          {li.description ?? "—"}
-                        </span>
-                        <span style={{ ...numStyle }}>
-                          {fmtAmount(li.amount, extraction.currency)}
-                        </span>
-                      </div>
-                    ))}
-                    {lineItems.length > 8 && (
-                      <div style={{ fontSize: 11, color: "var(--ad-text-faint)" }}>
-                        +{lineItems.length - 8} more
-                      </div>
-                    )}
-                  </div>
+            <DynamicExtractionView extraction={extraction} lineItems={lineItems} />
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, color: "var(--ad-text-dim)", marginBottom: 12 }}>
+                {isAuth
+                  ? "No extracted data yet — Anima may still be processing this document, or extraction hasn't run."
+                  : "Vendor, amount, date and line items will appear here once you sign in."}
+              </div>
+              {isAuth && docRow && (
+                <button
+                  type="button"
+                  onClick={onReExtract}
+                  disabled={busy !== null}
+                  className="flex items-center"
+                  style={{
+                    height: 30,
+                    padding: "0 12px",
+                    borderRadius: 7,
+                    gap: 6,
+                    background: "color-mix(in oklab, var(--ad-accent-mint) 14%, transparent)",
+                    border: "1px solid color-mix(in oklab, var(--ad-accent-mint) 40%, var(--ad-border))",
+                    color: "var(--ad-accent-mint)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    cursor: busy === "extract" ? "wait" : "pointer",
+                  }}
+                >
+                  <Icon name="sparkle" size={11} />
+                  {busy === "extract" ? "Extracting…" : "Run extraction"}
+                </button>
+              )}
+              {extractError && (
+                <div style={{ marginTop: 10, fontSize: 11, color: "#ef4444" }}>
+                  {extractError}
                 </div>
               )}
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: "var(--ad-text-dim)" }}>
-              {isAuth
-                ? "No extracted data yet — Anima may still be processing this document."
-                : "Vendor, amount, date and line items will appear here once you sign in."}
             </div>
           )}
         </div>
@@ -461,6 +506,239 @@ function KV({ label, value }: { label: string; value: string }) {
         {label.toUpperCase()}
       </span>
       <span style={{ color: "var(--ad-text)", fontWeight: 500, ...numStyle }}>{value}</span>
+    </div>
+  );
+}
+
+interface DynamicExtractionViewProps {
+  extraction: AdExtractionRow;
+  lineItems: AdLineItemRow[];
+}
+
+function DynamicExtractionView({ extraction, lineItems }: DynamicExtractionViewProps) {
+  const fmtAmount = (a: number | null, c: string | null): string => {
+    if (a == null) return "—";
+    const cur = c ?? "EUR";
+    try {
+      return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format(a);
+    } catch {
+      return `${a.toFixed(2)} ${cur}`;
+    }
+  };
+  const fmtDate = (s: string | null): string => {
+    if (!s) return "—";
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleDateString();
+  };
+
+  const dt = extraction.document_type ?? "other";
+  const meta = (extraction.metadata ?? {}) as Record<string, unknown>;
+
+  // Helper for rendering metadata values cleanly.
+  const m = (key: string): string | null => {
+    const v = meta[key];
+    if (v == null) return null;
+    if (typeof v === "string") return v.trim() || null;
+    if (typeof v === "number") return String(v);
+    return null;
+  };
+  const mList = (key: string): string[] => {
+    const v = meta[key];
+    if (!Array.isArray(v)) return [];
+    return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {/* Summary always at top */}
+      {extraction.summary && (
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--ad-text)",
+            lineHeight: 1.5,
+            paddingBottom: 8,
+            borderBottom: "1px solid var(--ad-hairline)",
+          }}
+        >
+          {extraction.summary}
+        </div>
+      )}
+
+      {/* Type-specific fields */}
+      {dt === "financial" && (
+        <>
+          <KV label="Vendor" value={extraction.vendor ?? "—"} />
+          <KV label="Total" value={fmtAmount(extraction.total_amount, extraction.currency)} />
+          <KV label="Date" value={fmtDate(extraction.doc_date)} />
+          {extraction.invoice_number && <KV label="Invoice #" value={extraction.invoice_number} />}
+          {lineItems.length > 0 && (
+            <LineItemsView items={lineItems} currency={extraction.currency} />
+          )}
+        </>
+      )}
+
+      {dt === "contract" && (
+        <>
+          {mList("parties").length > 0 && <KV label="Parties" value={mList("parties").join(", ")} />}
+          {m("contract_type") && <KV label="Type" value={m("contract_type")!} />}
+          {m("effective_date") && <KV label="Effective" value={fmtDate(m("effective_date"))} />}
+          {mList("key_terms").length > 0 && (
+            <BulletList label="Key terms" items={mList("key_terms")} />
+          )}
+        </>
+      )}
+
+      {dt === "legal" && (
+        <>
+          {mList("parties").length > 0 && <KV label="Parties" value={mList("parties").join(", ")} />}
+          {m("case_or_reference") && <KV label="Case / Ref" value={m("case_or_reference")!} />}
+          {m("court_or_authority") && <KV label="Authority" value={m("court_or_authority")!} />}
+          {mList("key_points").length > 0 && (
+            <BulletList label="Key points" items={mList("key_points")} />
+          )}
+        </>
+      )}
+
+      {dt === "medical" && (
+        <>
+          {m("patient_name") && <KV label="Patient" value={m("patient_name")!} />}
+          {m("doctor") && <KV label="Doctor" value={m("doctor")!} />}
+          {m("date") && <KV label="Date" value={fmtDate(m("date"))} />}
+          {m("diagnosis_or_topic") && <KV label="Topic" value={m("diagnosis_or_topic")!} />}
+          {m("prescription") && <KV label="Prescription" value={m("prescription")!} />}
+        </>
+      )}
+
+      {dt === "educational" && (
+        <>
+          {m("institution") && <KV label="Institution" value={m("institution")!} />}
+          {m("student_name") && <KV label="Student" value={m("student_name")!} />}
+          {m("document_kind") && <KV label="Kind" value={m("document_kind")!} />}
+          {m("date") && <KV label="Date" value={fmtDate(m("date"))} />}
+          {m("grade_or_outcome") && <KV label="Outcome" value={m("grade_or_outcome")!} />}
+        </>
+      )}
+
+      {dt === "technical" && (
+        <>
+          {m("title") && <KV label="Title" value={m("title")!} />}
+          {m("language") && <KV label="Language" value={m("language")!} />}
+          {mList("topics").length > 0 && <BulletList label="Topics" items={mList("topics")} />}
+          {mList("key_concepts").length > 0 && (
+            <BulletList label="Key concepts" items={mList("key_concepts")} />
+          )}
+        </>
+      )}
+
+      {dt === "correspondence" && (
+        <>
+          {m("from") && <KV label="From" value={m("from")!} />}
+          {m("to") && <KV label="To" value={m("to")!} />}
+          {m("subject") && <KV label="Subject" value={m("subject")!} />}
+          {m("date") && <KV label="Date" value={fmtDate(m("date"))} />}
+        </>
+      )}
+
+      {dt === "personal" && (
+        <>
+          {m("document_kind") && <KV label="Kind" value={m("document_kind")!} />}
+          {m("full_name") && <KV label="Name" value={m("full_name")!} />}
+          {m("identifier") && <KV label="ID" value={m("identifier")!} />}
+          {m("valid_until") && <KV label="Valid until" value={fmtDate(m("valid_until"))} />}
+        </>
+      )}
+
+      {dt === "media" && (
+        <>
+          {m("description") && <KV label="Description" value={m("description")!} />}
+          {mList("detected_objects").length > 0 && (
+            <BulletList label="Detected" items={mList("detected_objects")} />
+          )}
+        </>
+      )}
+
+      {dt === "other" && mList("key_facts").length > 0 && (
+        <BulletList label="Key facts" items={mList("key_facts")} />
+      )}
+    </div>
+  );
+}
+
+function LineItemsView({
+  items,
+  currency,
+}: {
+  items: AdLineItemRow[];
+  currency: string | null;
+}) {
+  const fmt = (a: number | null) => {
+    if (a == null) return "—";
+    try {
+      return new Intl.NumberFormat("de-DE", {
+        style: "currency",
+        currency: currency ?? "EUR",
+      }).format(a);
+    } catch {
+      return `${a.toFixed(2)} ${currency ?? "EUR"}`;
+    }
+  };
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div
+        style={{
+          fontSize: 10,
+          color: "var(--ad-text-faint)",
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+          fontWeight: 600,
+          marginBottom: 6,
+        }}
+      >
+        Line items
+      </div>
+      <div style={{ display: "grid", gap: 4 }}>
+        {items.slice(0, 8).map((li) => (
+          <div
+            key={li.id}
+            className="flex items-center justify-between"
+            style={{ fontSize: 12, color: "var(--ad-text-dim)" }}
+          >
+            <span style={{ flex: 1, marginRight: 8 }}>{li.description ?? "—"}</span>
+            <span style={{ ...numStyle }}>{fmt(li.amount)}</span>
+          </div>
+        ))}
+        {items.length > 8 && (
+          <div style={{ fontSize: 11, color: "var(--ad-text-faint)" }}>
+            +{items.length - 8} more
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BulletList({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 10,
+          color: "var(--ad-text-faint)",
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+          fontWeight: 600,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--ad-text-dim)", lineHeight: 1.55 }}>
+        {items.slice(0, 8).map((it, i) => (
+          <li key={i}>{it}</li>
+        ))}
+      </ul>
     </div>
   );
 }

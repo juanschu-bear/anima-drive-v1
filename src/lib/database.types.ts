@@ -31,9 +31,24 @@ export interface AdUserCategoryRow {
   created_at: string;
 }
 
+export type DocumentType =
+  | "financial"
+  | "contract"
+  | "legal"
+  | "medical"
+  | "educational"
+  | "technical"
+  | "correspondence"
+  | "personal"
+  | "media"
+  | "other";
+
 export interface AdExtractionRow {
   id: string;
   document_id: string;
+  document_type: DocumentType | null;
+  summary: string | null;
+  metadata: Record<string, unknown> | null;
   vendor: string | null;
   doc_date: string | null;
   total_amount: number | null;
