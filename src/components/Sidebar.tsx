@@ -28,9 +28,10 @@ const NAV: NavItem[] = [
   { k: "ask",       icon: "sparkle", label: "nav_ask",       path: "/ai" },
   { k: "dashboard", icon: "grid",    label: "nav_dashboard", path: "/" },
   { k: "documents", icon: "file",    label: "nav_documents", path: "/documents" },
-  { k: "sheets",    icon: "sheet",   label: "nav_sheets" },
-  { k: "trash",     icon: "trash",   label: "nav_trash" },
-  { k: "contacts",  icon: "people",  label: "nav_contacts" },
+  { k: "sheets",    icon: "sheet",   label: "nav_sheets",    path: "/sheets" },
+  { k: "trash",     icon: "trash",   label: "nav_trash",     path: "/trash" },
+  { k: "contacts",  icon: "people",  label: "nav_contacts",  path: "/contacts" },
+  { k: "settings",  icon: "settings",label: "nav_settings",  path: "/settings" },
 ];
 
 function pathToKey(pathname: string): string {
@@ -38,6 +39,10 @@ function pathToKey(pathname: string): string {
   if (pathname.startsWith("/documents")) return "documents";
   if (pathname.startsWith("/categories")) return "documents";
   if (pathname.startsWith("/ai")) return "ask";
+  if (pathname.startsWith("/sheets")) return "sheets";
+  if (pathname.startsWith("/trash")) return "trash";
+  if (pathname.startsWith("/contacts")) return "contacts";
+  if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/onboarding")) return "dashboard";
   return "dashboard";
 }

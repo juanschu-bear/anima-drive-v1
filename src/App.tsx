@@ -12,6 +12,10 @@ import { AIFull } from "@/pages/AIFull";
 import { UploadModal } from "@/pages/UploadModal";
 import { Onboarding } from "@/pages/Onboarding";
 import { Login } from "@/pages/Login";
+import { Sheets } from "@/pages/Sheets";
+import { Trash } from "@/pages/Trash";
+import { Contacts } from "@/pages/Contacts";
+import { Settings } from "@/pages/Settings";
 
 function LoadingShell() {
   return (
@@ -49,6 +53,10 @@ export function App() {
       <Route path="/documents"      element={<Browser />} />
       <Route path="/ai"             element={<AIFull />} />
       <Route path="/upload"         element={<UploadModal />} />
+      <Route path="/sheets"         element={<Sheets />} />
+      <Route path="/trash"          element={<Trash />} />
+      <Route path="/contacts"       element={<Contacts />} />
+      <Route path="/settings"       element={<Settings />} />
       <Route path="/onboarding"     element={<Onboarding />} />
       <Route path="*"               element={<Navigate to="/" replace />} />
     </Routes>

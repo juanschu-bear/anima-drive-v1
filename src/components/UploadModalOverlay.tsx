@@ -241,6 +241,22 @@ export function UploadModalOverlay({ open, onClose }: UploadModalOverlayProps) {
         <Panel style={{ width: 640, padding: 32, position: "relative", maxHeight: "90vh", overflow: "auto" }}>
           <div
             onClick={onClose}
+            className="flex items-center"
+            style={{
+              position: "absolute",
+              top: 18,
+              left: 18,
+              gap: 6,
+              fontSize: 12,
+              color: "var(--ad-text-dim)",
+              cursor: "pointer",
+            }}
+          >
+            <Icon name="arrow-left" size={13} stroke={2} />
+            Back
+          </div>
+          <div
+            onClick={onClose}
             className="flex items-center justify-center"
             style={{
               position: "absolute",

@@ -178,23 +178,32 @@ Return JSON only.`;
     metadata: { confidence, provider, reason: result.reason ?? null },
   });
 
-  // 6. Trigger extract asynchronously. We don't await the response so the user
-  // gets a fast 200 — extraction completes in its own request.
+  // 6. Trigger extract synchronously. We wait for it so the document is fully
+  // ready (vendor/amount/date populated) by the time we return 200.
+  // This adds ~3-5s to the request but means the UI never shows a half-processed doc.
   const proto = (req.headers["x-forwarded-proto"] as string) ?? "https";
   const host = req.headers.host;
   if (host) {
     const extractUrl = `${proto}://${host}/api/extract`;
-    fetch(extractUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: req.headers.authorization ?? "",
-      },
-      body: JSON.stringify({ documentId }),
-    }).catch((e) => {
+    try {
+      const extractRes = await fetch(extractUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: req.headers.authorization ?? "",
+        },
+        body: JSON.stringify({ documentId }),
+      });
+      if (!extractRes.ok) {
+        const errBody = await extractRes.text().catch(() => "<no body>");
+        // eslint-disable-next-line no-console
+        console.warn("[categorize] extract returned non-OK:", extractRes.status, errBody);
+      }
+    } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("[categorize] extract trigger failed:", e);
-    });
+      // We swallow this — categorize succeeded, extraction can be retried later.
+    }
   }
 
   res.status(200).json({

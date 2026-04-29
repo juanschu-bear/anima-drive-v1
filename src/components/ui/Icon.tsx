@@ -6,7 +6,7 @@
 import type { CSSProperties, SVGProps } from "react";
 
 export type IconName =
-  | "upload" | "sparkle" | "grid" | "file" | "folder" | "sheet" | "trash"
+  | "upload" | "download" | "sparkle" | "grid" | "file" | "folder" | "sheet" | "trash"
   | "people" | "settings" | "search" | "trend-up" | "trend-down" | "key"
   | "shield" | "receipt" | "chart" | "plane" | "box" | "megaphone" | "spark"
   | "car" | "antenna" | "glass" | "dots" | "send" | "arrow-right" | "arrow-left"
@@ -15,6 +15,7 @@ export type IconName =
 
 const ICONS: Record<IconName, string> = {
   "upload":      "M12 16V5M12 5l-4 4M12 5l4 4M5 18h14",
+  "download":    "M12 5v11M12 16l-4-4M12 16l4-4M5 19h14",
   "sparkle":     "M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6L12 4Z M19 3v2M19 4h2",
   "grid":        "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
   "file":        "M6 3h9l3 3v15H6z M15 3v3h3",
