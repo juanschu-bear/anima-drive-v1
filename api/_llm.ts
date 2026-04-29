@@ -272,5 +272,9 @@ export function parseJsonResponse<T>(text: string): T {
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     cleaned = cleaned.slice(firstBrace, lastBrace + 1);
   }
-  return JSON.parse(cleaned) as T;
+  const parsed = JSON.parse(cleaned) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new LlmError("LLM JSON parse produced a non-object payload.");
+  }
+  return parsed as T;
 }

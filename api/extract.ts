@@ -204,31 +204,32 @@ async function handle(req: VercelRequest, res: VercelResponse) {
   const isPdf = isPdfMime(doc.mime_type, doc.ext);
   let userContent: string | LlmContent[];
   if (isImage) {
-    const textBlock: LlmContent = {
-      type: "text",
-      text: buildContextPrompt(doc),
-    };
     const imageBlock: LlmContent = {
       type: "image_url",
       url: signed.signedUrl,
     };
-    userContent = [textBlock, imageBlock];
-  } else if (isPdf) {
     const textBlock: LlmContent = {
       type: "text",
       text: buildContextPrompt(doc),
     };
+    userContent = [imageBlock, textBlock];
+  } else if (isPdf) {
     const pdfBlock: LlmContent = {
       type: "document_url",
       url: signed.signedUrl,
     };
-    userContent = [textBlock, pdfBlock];
+    const textBlock: LlmContent = {
+      type: "text",
+      text: buildContextPrompt(doc),
+    };
+    userContent = [pdfBlock, textBlock];
   } else {
     userContent = buildContextPrompt(doc);
   }
 
   // ── Call LLM ────────────────────────────────────────────────────────
   let extracted: ExtractionResult;
+  let llmRawText = "";
   let provider: string;
   try {
     const llm = await llmCall({
@@ -241,7 +242,30 @@ async function handle(req: VercelRequest, res: VercelResponse) {
       maxTokens: 1500,
     });
     provider = llm.provider;
-    extracted = parseJsonResponse<ExtractionResult>(llm.text);
+    llmRawText = llm.text ?? "";
+    // eslint-disable-next-line no-console
+    console.log("[extract] llm raw", {
+      documentId,
+      provider,
+      chars: llmRawText.length,
+      preview: llmRawText.slice(0, 1200),
+    });
+    extracted = parseJsonResponse<ExtractionResult>(llmRawText);
+    // eslint-disable-next-line no-console
+    console.log("[extract] parsed extraction", {
+      documentId,
+      keys: Object.keys((extracted as unknown as Record<string, unknown>) ?? {}),
+      has_display_name: !!(extracted.display_name ?? "").trim(),
+      has_document_type: !!(extracted.document_type ?? "").trim(),
+      has_summary: !!(extracted.summary ?? "").trim(),
+      has_metadata: !!extracted.metadata,
+      has_financial: !!(
+        extracted.vendor ||
+        extracted.invoice_number ||
+        extracted.doc_date ||
+        extracted.total_amount != null
+      ),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "LLM call failed";
     await svc
@@ -255,7 +279,9 @@ async function handle(req: VercelRequest, res: VercelResponse) {
   // ── Validate and normalize ─────────────────────────────────────────
   const docType = normalizeDocType(extracted.document_type);
   const displayName = (extracted.display_name ?? "").trim().slice(0, 200) || doc.filename;
-  const summary = (extracted.summary ?? "").trim();
+  const summary =
+    (extracted.summary ?? "").trim() ||
+    `Auto-summary fallback: ${doc.filename} (${doc.mime_type ?? "unknown"}), classified as ${docType}.`;
 
   // ── Persist ad_extractions ──────────────────────────────────────────
   const extractionRow = {
@@ -272,8 +298,23 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     invoice_number: extracted.invoice_number ?? null,
     due_date: extracted.due_date ?? null,
     payment_terms: extracted.payment_terms ?? null,
-    raw_extraction: extracted as unknown,
+    raw_extraction: {
+      provider,
+      model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001",
+      raw_text: llmRawText,
+      parsed: extracted as unknown,
+    } as unknown,
   };
+  // eslint-disable-next-line no-console
+  console.log("[extract] upsert payload snapshot", {
+    documentId,
+    document_type: extractionRow.document_type,
+    summary_len: (extractionRow.summary ?? "").length,
+    has_metadata: !!extractionRow.metadata,
+    vendor: extractionRow.vendor,
+    total_amount: extractionRow.total_amount,
+    currency: extractionRow.currency,
+  });
 
   const { data: extractionInserted, error: extractionErr } = await svc
     .from("ad_extractions")
