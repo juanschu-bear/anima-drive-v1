@@ -282,6 +282,9 @@ async function handle(req: VercelRequest, res: VercelResponse) {
   const summary =
     (extracted.summary ?? "").trim() ||
     `Auto-summary fallback: ${doc.filename} (${doc.mime_type ?? "unknown"}), classified as ${docType}.`;
+  const recategorizedKey = recategorizeFromExtract(docType, extracted);
+  const shouldAutoRecategorize =
+    !!recategorizedKey && (!doc.category_key || doc.category_key === "cat_other");
 
   // ── Persist ad_extractions ──────────────────────────────────────────
   const extractionRow = {
@@ -352,6 +355,9 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     .update({
       status: "ready",
       display_name: displayName,
+      ...(shouldAutoRecategorize
+        ? { category_key: recategorizedKey, category_confidence: 0.99 }
+        : {}),
       extracted_at: new Date().toISOString(),
       error_message: null,
     })
@@ -363,7 +369,12 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     document_id: documentId,
     type: "extracted",
     message: `Extracted ${docType} document: ${displayName}`,
-    metadata: { provider, document_type: docType },
+    metadata: {
+      provider,
+      document_type: docType,
+      recategorized_to: shouldAutoRecategorize ? recategorizedKey : null,
+      previous_category_key: doc.category_key ?? null,
+    },
   });
 
   res.status(200).json({
@@ -423,4 +434,18 @@ function normalizeDocType(t: string | undefined): DocumentType {
   const v = (t ?? "").toLowerCase();
   if (allowed.includes(v as DocumentType)) return v as DocumentType;
   return "other";
+}
+
+function recategorizeFromExtract(
+  docType: DocumentType,
+  extracted: Pick<ExtractionResult, "vendor" | "invoice_number" | "total_amount">,
+): string | null {
+  if (docType === "legal" || docType === "contract") return "cat_contracts";
+  if (docType === "technical") return "cat_software";
+  if (docType === "financial") {
+    if (extracted.vendor || extracted.invoice_number || extracted.total_amount != null) {
+      return "cat_expenses";
+    }
+  }
+  return null;
 }
