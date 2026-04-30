@@ -285,10 +285,10 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
               flex: 1,
             }}
           >
-            <Panel style={{ padding: "18px 0 18px 22px", overflow: "hidden" }}>
+            <Panel style={{ padding: "18px 22px", overflow: "hidden" }}>
               <div
                 className="flex items-center justify-between"
-                style={{ marginBottom: 14, paddingRight: 22 }}
+                style={{ marginBottom: 14 }}
               >
                 <div
                   style={{
@@ -303,18 +303,18 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
                 </div>
               </div>
               <div
-                className="flex"
+                className="flex flex-col"
                 style={{
                   gap: 10,
-                  overflowX: "auto",
-                  overflowY: "hidden",
-                  paddingRight: 22,
-                  paddingBottom: 4,
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  paddingRight: 4,
+                  maxHeight: 338,
                   scrollbarWidth: "thin",
                 }}
               >
                 {documents.slice(0, 5).map((d, i) => (
-                  <RecentCard key={`${d.name}-${i}`} doc={d} delay={260 + i * 70} />
+                  <RecentCard key={`${d.name}-${i}`} doc={d} delay={260 + i * 70} layout="row" />
                 ))}
               </div>
             </Panel>

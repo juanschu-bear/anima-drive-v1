@@ -13,19 +13,21 @@ import { ThumbSwatch } from "@/components/ui/ThumbSwatch";
 interface RecentCardProps {
   doc: RecentDoc;
   delay?: number;
+  layout?: "compact" | "row";
 }
 
-export function RecentCard({ doc, delay = 0 }: RecentCardProps) {
+export function RecentCard({ doc, delay = 0, layout = "compact" }: RecentCardProps) {
   const { t } = useLang();
   const { openDoc } = useDocumentDetail();
   const cat = findCategory(doc.catKey);
   const on = useDelayed(delay);
   if (!cat) return null;
   const tintColor = ACCENT_VARS[cat.tint];
+  const isRow = layout === "row";
 
   const cardStyle: CSSProperties = {
-    width: "clamp(180px, 22vw, 220px)",
-    flexShrink: 0,
+    width: isRow ? "100%" : "clamp(180px, 22vw, 220px)",
+    flexShrink: isRow ? 1 : 0,
     padding: 12,
     borderRadius: 12,
     border: "1px solid var(--ad-border)",
@@ -49,29 +51,34 @@ export function RecentCard({ doc, delay = 0 }: RecentCardProps) {
         e.currentTarget.style.boxShadow = "";
       }}
     >
-      <ThumbSwatch cat={cat} ext={doc.ext} />
-      <div
-        style={{
-          marginTop: 10,
-          fontSize: 12,
-          fontWeight: 500,
-          color: "var(--ad-text)",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-          lineHeight: 1.25,
-          minHeight: 30,
-        }}
-      >
-        {doc.name}
-      </div>
-      <div className="flex items-center justify-between" style={{ marginTop: 6 }}>
-        <Chip tint={cat.tint} icon={cat.icon as never}>
-          {t(cat.key)}
-        </Chip>
-        <div style={{ fontSize: 10, color: "var(--ad-text-faint)", ...numStyle }}>
-          {t(doc.ageKey)}
+      <div className="flex" style={{ gap: 12, alignItems: "flex-start" }}>
+        <div style={{ width: isRow ? 130 : "100%", flexShrink: 0 }}>
+          <ThumbSwatch cat={cat} ext={doc.ext} />
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--ad-text)",
+              display: "-webkit-box",
+              WebkitLineClamp: isRow ? 3 : 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              lineHeight: 1.25,
+              minHeight: isRow ? 44 : 30,
+            }}
+          >
+            {doc.name}
+          </div>
+          <div className="flex items-center justify-between" style={{ marginTop: 8, gap: 8 }}>
+            <Chip tint={cat.tint} icon={cat.icon as never}>
+              {t(cat.key)}
+            </Chip>
+            <div style={{ fontSize: 10, color: "var(--ad-text-faint)", ...numStyle }}>
+              {t(doc.ageKey)}
+            </div>
+          </div>
         </div>
       </div>
     </div>
