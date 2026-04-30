@@ -11,6 +11,9 @@ type TranslationKey =
   | "nav_sheets" | "nav_trash" | "nav_contacts" | "nav_settings"
   | "page_sheets_title" | "page_sheets_sub" | "page_sheets_empty"
   | "page_trash_title" | "page_trash_sub" | "page_trash_empty" | "page_trash_restore" | "page_trash_purge"
+  | "confirm_delete_forever"
+  | "doc_modal_trash" | "doc_modal_delete_permanent" | "doc_modal_deleting"
+  | "err_trash_failed" | "err_purge_failed"
   | "page_contacts_title" | "page_contacts_sub" | "page_contacts_empty"
   | "page_settings_title" | "page_settings_profile" | "page_settings_name" | "page_settings_email"
   | "page_settings_save" | "page_settings_saved" | "page_settings_lang" | "page_settings_theme"
@@ -55,6 +58,12 @@ export const TR: Record<Lang, TranslationDict> = {
     page_trash_empty: "Nothing in the trash.",
     page_trash_restore: "Restore",
     page_trash_purge: "Delete forever",
+    confirm_delete_forever: "Permanently delete \"{name}\"? This cannot be undone.",
+    doc_modal_trash: "Trash",
+    doc_modal_delete_permanent: "Delete permanently",
+    doc_modal_deleting: "Deleting…",
+    err_trash_failed: "Failed to move to trash",
+    err_purge_failed: "Failed to delete document permanently",
     page_contacts_title: "Contacts",
     page_contacts_sub: "Vendors detected across all your documents.",
     page_contacts_empty: "No vendors yet — they'll appear once you upload some receipts.",
@@ -127,6 +136,12 @@ export const TR: Record<Lang, TranslationDict> = {
     page_trash_empty: "Papierkorb ist leer.",
     page_trash_restore: "Wiederherstellen",
     page_trash_purge: "Endgültig löschen",
+    confirm_delete_forever: "\"{name}\" endgültig löschen? Das kann nicht rückgängig gemacht werden.",
+    doc_modal_trash: "Papierkorb",
+    doc_modal_delete_permanent: "Endgültig löschen",
+    doc_modal_deleting: "Lösche…",
+    err_trash_failed: "Verschieben in den Papierkorb fehlgeschlagen",
+    err_purge_failed: "Dokument konnte nicht endgültig gelöscht werden",
     page_contacts_title: "Kontakte",
     page_contacts_sub: "Anbieter, die in deinen Dokumenten erkannt wurden.",
     page_contacts_empty: "Noch keine Anbieter — sie erscheinen, sobald du Belege hochlädst.",
@@ -199,6 +214,12 @@ export const TR: Record<Lang, TranslationDict> = {
     page_trash_empty: "Papelera vacía.",
     page_trash_restore: "Restaurar",
     page_trash_purge: "Borrar definitivamente",
+    confirm_delete_forever: "¿Eliminar permanentemente \"{name}\"? Esto no se puede deshacer.",
+    doc_modal_trash: "Papelera",
+    doc_modal_delete_permanent: "Borrar definitivamente",
+    doc_modal_deleting: "Borrando…",
+    err_trash_failed: "No se pudo mover a la papelera",
+    err_purge_failed: "No se pudo borrar el documento definitivamente",
     page_contacts_title: "Contactos",
     page_contacts_sub: "Proveedores detectados en tus documentos.",
     page_contacts_empty: "Aún no hay proveedores — aparecerán cuando subas recibos.",

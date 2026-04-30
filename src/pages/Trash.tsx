@@ -27,7 +27,7 @@ export function Trash({ sidebarState }: TrashProps) {
   }
 
   async function onPurge(id: string, name: string) {
-    if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return;
+    if (!confirm(t("confirm_delete_forever").replace("{name}", name))) return;
     setBusyId(id);
     await purgeDoc(id);
     setBusyId(null);

@@ -202,7 +202,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
       await refresh();
       onClose();
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : "Failed to move to trash");
+      setDeleteError(e instanceof Error ? e.message : t("err_trash_failed"));
     } finally {
       setBusy(null);
     }
@@ -212,7 +212,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
     const targetId = docRow?.id ?? doc?.documentId ?? null;
     const targetName = docRow?.filename ?? doc?.originalFilename ?? doc?.name ?? "this document";
     if (!targetId) return;
-    if (!confirm(`Permanently delete "${targetName}"? This cannot be undone.`)) return;
+    if (!confirm(t("confirm_delete_forever").replace("{name}", targetName))) return;
     setDeleteError(null);
     setBusy("purge");
     try {
@@ -220,7 +220,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
       await refresh();
       onClose();
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : "Failed to delete document permanently");
+      setDeleteError(e instanceof Error ? e.message : t("err_purge_failed"));
     } finally {
       setBusy(null);
     }
@@ -457,7 +457,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
               }}
             >
               <Icon name="trash" size={13} />
-              {busy === "trash" ? "…" : "Trash"}
+              {busy === "trash" ? "…" : t("doc_modal_trash")}
             </button>
           )}
           {(docRow || doc.documentId) && (
@@ -479,7 +479,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
               }}
             >
               <Icon name="trash" size={13} />
-              {busy === "purge" ? "Deleting…" : "Delete permanently"}
+              {busy === "purge" ? t("doc_modal_deleting") : t("doc_modal_delete_permanent")}
             </button>
           )}
           <button
