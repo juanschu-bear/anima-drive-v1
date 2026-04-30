@@ -127,31 +127,28 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
   const trashDoc = useCallback(
     async (id: string) => {
       if (isMock) return;
-      const { error: err } = await supabase.from("ad_documents").update({ status: "trashed" }).eq("id", id);
-      if (err) throw new Error(`Failed to move to trash: ${err.message}`);
+      await callDocumentAction(id, "trash");
       await refresh();
     },
-    [isMock, refresh],
+    [callDocumentAction, isMock, refresh],
   );
 
   const restoreDoc = useCallback(
     async (id: string) => {
       if (isMock) return;
-      const { error: err } = await supabase.from("ad_documents").update({ status: "ready" }).eq("id", id);
-      if (err) throw new Error(`Failed to restore document: ${err.message}`);
+      await callDocumentAction(id, "restore");
       await refresh();
     },
-    [isMock, refresh],
+    [callDocumentAction, isMock, refresh],
   );
 
   const purgeDoc = useCallback(
     async (id: string) => {
       if (isMock) return;
-      const { error: err } = await supabase.from("ad_documents").delete().eq("id", id);
-      if (err) throw new Error(`Failed to delete document permanently: ${err.message}`);
+      await callDocumentAction(id, "purge");
       await refresh();
     },
-    [isMock, refresh],
+    [callDocumentAction, isMock, refresh],
   );
 
   return {
@@ -166,3 +163,23 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
     isMock,
   };
 }
+  const callDocumentAction = useCallback(
+    async (id: string, action: "trash" | "restore" | "purge") => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const res = await fetch("/api/document-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ documentId: id, action }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Document action failed: ${res.status} ${text.slice(0, 200)}`);
+      }
+    },
+    [],
+  );

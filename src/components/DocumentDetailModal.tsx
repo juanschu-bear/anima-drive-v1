@@ -193,7 +193,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
   }
 
   async function onTrash() {
-    const targetId = docRow?.id ?? doc.documentId ?? null;
+    const targetId = docRow?.id ?? doc?.documentId ?? null;
     if (!targetId) return;
     setDeleteError(null);
     setBusy("trash");
@@ -209,8 +209,8 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
   }
 
   async function onPurgeNow() {
-    const targetId = docRow?.id ?? doc.documentId ?? null;
-    const targetName = docRow?.filename ?? doc.originalFilename ?? doc.name;
+    const targetId = docRow?.id ?? doc?.documentId ?? null;
+    const targetName = docRow?.filename ?? doc?.originalFilename ?? doc?.name ?? "this document";
     if (!targetId) return;
     if (!confirm(`Permanently delete "${targetName}"? This cannot be undone.`)) return;
     setDeleteError(null);
