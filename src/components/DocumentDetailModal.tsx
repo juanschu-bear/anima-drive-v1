@@ -31,13 +31,13 @@ interface DocumentDetailModalProps {
 export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) {
   const { t } = useLang();
   const { user } = useAuth();
-  const { rawDocuments, trashDoc, refresh } = useDocuments();
+  const { rawDocuments, trashDoc, purgeDoc, refresh } = useDocuments();
   const configured = isSupabaseConfigured();
   const isAuth = configured && !!user;
 
   const [extraction, setExtraction] = useState<AdExtractionRow | null>(null);
   const [lineItems, setLineItems] = useState<AdLineItemRow[]>([]);
-  const [busy, setBusy] = useState<"open" | "download" | "trash" | "extract" | null>(null);
+  const [busy, setBusy] = useState<"open" | "download" | "trash" | "purge" | "extract" | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [docRow, setDocRow] = useState<AdDocumentRow | null>(null);
 
@@ -192,9 +192,22 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
   }
 
   async function onTrash() {
-    if (!docRow) return;
+    const targetId = docRow?.id ?? doc.documentId ?? null;
+    if (!targetId) return;
     setBusy("trash");
-    await trashDoc(docRow.id);
+    await trashDoc(targetId);
+    setBusy(null);
+    await refresh();
+    onClose();
+  }
+
+  async function onPurgeNow() {
+    const targetId = docRow?.id ?? doc.documentId ?? null;
+    const targetName = docRow?.filename ?? doc.originalFilename ?? doc.name;
+    if (!targetId) return;
+    if (!confirm(`Permanently delete "${targetName}"? This cannot be undone.`)) return;
+    setBusy("purge");
+    await purgeDoc(targetId);
     setBusy(null);
     await refresh();
     onClose();
@@ -411,7 +424,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
 
         {/* Actions */}
         <div className="flex justify-end items-center" style={{ gap: 8, flexWrap: "wrap" }}>
-          {isAuth && docRow && (
+          {isAuth && (docRow || doc.documentId) && (
             <button
               type="button"
               onClick={onTrash}
@@ -432,6 +445,28 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
             >
               <Icon name="trash" size={13} />
               {busy === "trash" ? "…" : "Trash"}
+            </button>
+          )}
+          {isAuth && (docRow || doc.documentId) && (
+            <button
+              type="button"
+              onClick={onPurgeNow}
+              disabled={busy !== null}
+              className="flex items-center"
+              style={{
+                height: 36,
+                padding: "0 14px",
+                borderRadius: 9,
+                gap: 7,
+                background: "transparent",
+                border: "1px solid color-mix(in oklab, #ef4444 40%, var(--ad-border))",
+                color: "#ef4444",
+                fontSize: 12,
+                cursor: busy ? "wait" : "pointer",
+              }}
+            >
+              <Icon name="trash" size={13} />
+              {busy === "purge" ? "Deleting…" : "Delete permanently"}
             </button>
           )}
           <button
