@@ -10,6 +10,8 @@ export interface ExtractedRow {
   document_id: string;
   filename: string;
   category_key: string | null;
+  document_type: string | null;
+  financial_direction: "income" | "expense" | "unknown";
   vendor: string | null;
   total_amount: number | null;
   currency: string | null;
@@ -75,6 +77,8 @@ export function useExtractions(): UseExtractionsResult {
         document_id: d.id,
         filename: d.filename,
         category_key: d.category_key,
+        document_type: e?.document_type ?? null,
+        financial_direction: inferFinancialDirection(e?.metadata ?? null),
         vendor: e?.vendor ?? null,
         total_amount: e?.total_amount ?? null,
         currency: e?.currency ?? null,
@@ -92,4 +96,13 @@ export function useExtractions(): UseExtractionsResult {
   }, [user?.id, configured, refresh]);
 
   return { rows, loading, error, refresh, isMock };
+}
+
+function inferFinancialDirection(metadata: AdExtractionRow["metadata"]): "income" | "expense" | "unknown" {
+  const md = (metadata ?? {}) as Record<string, unknown>;
+  const direction = typeof md.direction === "string" ? md.direction.toLowerCase() : "";
+  if (direction === "income" || direction === "expense" || direction === "unknown") {
+    return direction;
+  }
+  return "unknown";
 }

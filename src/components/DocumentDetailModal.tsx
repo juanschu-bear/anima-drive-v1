@@ -390,7 +390,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
                   border: "1px solid var(--ad-border)",
                 }}
               >
-                {extraction.document_type}
+                Doc Type: {extraction.document_type}
               </div>
             )}
           </div>
@@ -624,6 +624,7 @@ function DynamicExtractionView({ extraction, lineItems }: DynamicExtractionViewP
       {/* Type-specific fields */}
       {dt === "financial" && (
         <>
+          {m("direction") && <KV label="Direction" value={m("direction")!} />}
           <KV label="Vendor" value={extraction.vendor ?? "—"} />
           <KV label="Total" value={fmtAmount(extraction.total_amount, extraction.currency)} />
           <KV label="Date" value={fmtDate(extraction.doc_date)} />

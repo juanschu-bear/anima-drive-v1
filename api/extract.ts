@@ -74,6 +74,8 @@ interface ExtractionResult {
   metadata?: Record<string, unknown> | null;
 }
 
+type FinancialDirection = "income" | "expense" | "unknown";
+
 // ─────────────────────────────────────────────────────────────────────
 // Prompt
 // ─────────────────────────────────────────────────────────────────────
@@ -102,6 +104,7 @@ Schema:
 
   // METADATA — type-specific structured fields. Schema varies by document_type:
   "metadata": {
+    // For "financial":         {direction: "income" | "expense" | "unknown", direction_confidence: number, issuer_name: string | null, recipient_name: string | null, doc_kind: "invoice_issued" | "invoice_received" | "receipt" | "quote" | "statement" | "other"}
     // For "contract":         {parties: string[], contract_type: string, effective_date: "YYYY-MM-DD" | null, key_terms: string[]}
     // For "legal":             {parties: string[], case_or_reference: string | null, court_or_authority: string | null, key_points: string[]}
     // For "medical":           {patient_name: string | null, doctor: string | null, date: "YYYY-MM-DD" | null, diagnosis_or_topic: string | null, prescription: string | null}
@@ -120,6 +123,7 @@ Rules:
 - For images, READ the document — describe what is actually there, do not invent.
 - For non-image documents (PDF without vision support), make a best guess from filename and any context provided. If you genuinely cannot tell, set document_type="other" and explain in the summary.
 - Numbers are bare numerics (no currency symbol).
+- For financial documents, infer if this is MONEY IN (income), MONEY OUT (expense), or unclear (unknown), and set metadata.direction accordingly.
 - The summary should be useful — what would a human want to remember about this document later?`;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -283,7 +287,8 @@ async function handle(req: VercelRequest, res: VercelResponse) {
   const summary =
     (extracted.summary ?? "").trim() ||
     `Auto-summary fallback: ${doc.filename} (${doc.mime_type ?? "unknown"}), classified as ${docType}.`;
-  const recategorizedKey = recategorizeFromExtract(docType, extracted);
+  const financialDirection = inferFinancialDirection(extracted, doc.filename);
+  const recategorizedKey = recategorizeFromExtract(docType, extracted, financialDirection);
   const shouldAutoRecategorize =
     !!recategorizedKey && (!doc.category_key || doc.category_key === "cat_other");
 
@@ -373,6 +378,7 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     metadata: {
       provider,
       document_type: docType,
+      financial_direction: financialDirection,
       recategorized_to: shouldAutoRecategorize ? recategorizedKey : null,
       previous_category_key: doc.category_key ?? null,
     },
@@ -384,6 +390,7 @@ async function handle(req: VercelRequest, res: VercelResponse) {
     source: "anima-drive.extract",
     payload: {
       document_type: docType,
+      financial_direction: financialDirection,
       display_name: displayName,
       total_amount: extracted.total_amount ?? null,
       currency: extracted.currency ?? "EUR",
@@ -456,13 +463,35 @@ function normalizeDocType(t: string | undefined): DocumentType {
 function recategorizeFromExtract(
   docType: DocumentType,
   extracted: Pick<ExtractionResult, "vendor" | "invoice_number" | "total_amount">,
+  financialDirection: FinancialDirection,
 ): string | null {
   if (docType === "legal" || docType === "contract") return "cat_contracts";
   if (docType === "technical") return "cat_software";
   if (docType === "financial") {
+    if (financialDirection === "income") return "cat_revenue";
     if (extracted.vendor || extracted.invoice_number || extracted.total_amount != null) {
       return "cat_expenses";
     }
   }
   return null;
+}
+
+function inferFinancialDirection(extracted: ExtractionResult, filename: string): FinancialDirection {
+  if (!extracted || extracted.document_type !== "financial") return "unknown";
+  const md = (extracted.metadata ?? {}) as Record<string, unknown>;
+  const dir = typeof md.direction === "string" ? md.direction.toLowerCase() : "";
+  if (dir === "income" || dir === "expense" || dir === "unknown") {
+    return dir as FinancialDirection;
+  }
+
+  const kind = typeof md.doc_kind === "string" ? md.doc_kind.toLowerCase() : "";
+  if (kind === "invoice_issued") return "income";
+  if (kind === "invoice_received" || kind === "receipt") return "expense";
+
+  const haystack = `${filename} ${extracted.summary ?? ""} ${extracted.invoice_number ?? ""}`.toLowerCase();
+  const incomeHints = ["rechnung an", "invoice to", "factura a", "issued invoice", "outgoing invoice"];
+  const expenseHints = ["receipt", "beleg", "quittung", "invoice from", "factura de", "eingangsrechnung"];
+  if (incomeHints.some((h) => haystack.includes(h))) return "income";
+  if (expenseHints.some((h) => haystack.includes(h))) return "expense";
+  return "unknown";
 }

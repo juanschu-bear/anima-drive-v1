@@ -23,9 +23,27 @@ export function Sheets({ sidebarState }: SheetsProps) {
   const { rows, loading, isMock } = useExtractions();
   const [sort, setSort] = useState<SortKey>("uploaded_at");
   const [asc, setAsc] = useState(false);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [directionFilter, setDirectionFilter] = useState("all");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (categoryFilter !== "all" && (r.category_key ?? "none") !== categoryFilter) return false;
+      if (typeFilter !== "all" && (r.document_type ?? "other") !== typeFilter) return false;
+      if (directionFilter !== "all" && r.financial_direction !== directionFilter) return false;
+      if (!q) return true;
+      const hay = `${r.filename} ${r.vendor ?? ""} ${r.currency ?? ""} ${r.category_key ?? ""} ${
+        r.document_type ?? ""
+      }`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [rows, query, categoryFilter, typeFilter, directionFilter]);
 
   const sorted = useMemo(() => {
-    const copy = [...rows];
+    const copy = [...filtered];
     copy.sort((a, b) => {
       let av: string | number | null = a[sort];
       let bv: string | number | null = b[sort];
@@ -36,7 +54,7 @@ export function Sheets({ sidebarState }: SheetsProps) {
       return 0;
     });
     return copy;
-  }, [rows, sort, asc]);
+  }, [filtered, sort, asc]);
 
   function toggle(k: SortKey) {
     if (sort === k) setAsc(!asc);
@@ -47,12 +65,24 @@ export function Sheets({ sidebarState }: SheetsProps) {
   }
 
   function exportCsv() {
-    const header = ["Filename", "Category", "Vendor", "Amount", "Currency", "Document date", "Uploaded"];
+    const header = [
+      "Filename",
+      "Category",
+      "Type",
+      "Direction",
+      "Vendor",
+      "Amount",
+      "Currency",
+      "Document date",
+      "Uploaded",
+    ];
     const lines = [header.join(",")];
     for (const r of sorted) {
       const cells = [
         csvCell(r.filename),
         csvCell(r.category_key ? r.category_key.replace(/^cat_/, "") : ""),
+        csvCell(r.document_type ?? ""),
+        csvCell(r.financial_direction),
         csvCell(r.vendor ?? ""),
         r.total_amount != null ? r.total_amount.toString() : "",
         csvCell(r.currency ?? ""),
@@ -119,7 +149,49 @@ export function Sheets({ sidebarState }: SheetsProps) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 2fr) 1.2fr 1.2fr 1fr 1fr",
+              gridTemplateColumns: "minmax(0, 1.8fr) repeat(3, minmax(0, 1fr))",
+              gap: 10,
+              padding: "14px 22px 10px",
+              borderBottom: "1px solid var(--ad-hairline)",
+            }}
+          >
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search filename/vendor..."
+              style={filterInputStyle}
+            />
+            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={filterInputStyle}>
+              <option value="all">All categories</option>
+              {Array.from(new Set(rows.map((r) => r.category_key).filter(Boolean))).map((k) => (
+                <option key={k} value={k as string}>
+                  {(k as string).replace(/^cat_/, "")}
+                </option>
+              ))}
+            </select>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={filterInputStyle}>
+              <option value="all">All types</option>
+              {Array.from(new Set(rows.map((r) => r.document_type).filter(Boolean))).map((k) => (
+                <option key={k} value={k as string}>
+                  {k}
+                </option>
+              ))}
+            </select>
+            <select
+              value={directionFilter}
+              onChange={(e) => setDirectionFilter(e.target.value)}
+              style={filterInputStyle}
+            >
+              <option value="all">All directions</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 2fr) 1fr 1fr 1.2fr 1fr 1fr",
               padding: "14px 22px",
               borderBottom: "1px solid var(--ad-hairline)",
               gap: 16,
@@ -129,6 +201,8 @@ export function Sheets({ sidebarState }: SheetsProps) {
               Filename {sort === "uploaded_at" && (asc ? "↑" : "↓")}
             </div>
             <div style={headerCellStyle}>Category</div>
+            <div style={headerCellStyle}>Type</div>
+            <div style={headerCellStyle}>Direction</div>
             <div style={headerCellStyle} onClick={() => toggle("vendor")}>
               Vendor {sort === "vendor" && (asc ? "↑" : "↓")}
             </div>
@@ -151,7 +225,7 @@ export function Sheets({ sidebarState }: SheetsProps) {
                 key={r.document_id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 2fr) 1.2fr 1.2fr 1fr 1fr",
+                  gridTemplateColumns: "minmax(0, 2fr) 1fr 1fr 1.2fr 1fr 1fr",
                   padding: "14px 22px",
                   borderBottom: "1px solid var(--ad-hairline)",
                   gap: 16,
@@ -173,6 +247,8 @@ export function Sheets({ sidebarState }: SheetsProps) {
                   </span>
                 </div>
                 <div style={{ color: "var(--ad-text-dim)" }}>{cat ? t(cat.key) : "—"}</div>
+                <div style={{ color: "var(--ad-text-dim)" }}>{r.document_type ?? "—"}</div>
+                <div style={{ color: "var(--ad-text-dim)" }}>{directionLabel(r.financial_direction)}</div>
                 <div style={{ color: "var(--ad-text-dim)" }}>{r.vendor ?? "—"}</div>
                 <div style={{ color: "var(--ad-text-dim)", ...numStyle }}>
                   {r.doc_date ? new Date(r.doc_date).toLocaleDateString() : "—"}
@@ -227,3 +303,20 @@ function csvCell(s: string): string {
   }
   return s;
 }
+
+function directionLabel(direction: "income" | "expense" | "unknown"): string {
+  if (direction === "income") return "Income";
+  if (direction === "expense") return "Expense";
+  return "Unknown";
+}
+
+const filterInputStyle: CSSProperties = {
+  height: 34,
+  borderRadius: 9,
+  border: "1px solid var(--ad-border)",
+  background: "var(--ad-chip)",
+  color: "var(--ad-text)",
+  padding: "0 10px",
+  fontSize: 12,
+  outline: "none",
+};
