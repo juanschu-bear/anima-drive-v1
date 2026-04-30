@@ -127,7 +127,8 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
   const trashDoc = useCallback(
     async (id: string) => {
       if (isMock) return;
-      await supabase.from("ad_documents").update({ status: "trashed" }).eq("id", id);
+      const { error: err } = await supabase.from("ad_documents").update({ status: "trashed" }).eq("id", id);
+      if (err) throw new Error(`Failed to move to trash: ${err.message}`);
       await refresh();
     },
     [isMock, refresh],
@@ -136,7 +137,8 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
   const restoreDoc = useCallback(
     async (id: string) => {
       if (isMock) return;
-      await supabase.from("ad_documents").update({ status: "ready" }).eq("id", id);
+      const { error: err } = await supabase.from("ad_documents").update({ status: "ready" }).eq("id", id);
+      if (err) throw new Error(`Failed to restore document: ${err.message}`);
       await refresh();
     },
     [isMock, refresh],
@@ -145,7 +147,8 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
   const purgeDoc = useCallback(
     async (id: string) => {
       if (isMock) return;
-      await supabase.from("ad_documents").delete().eq("id", id);
+      const { error: err } = await supabase.from("ad_documents").delete().eq("id", id);
+      if (err) throw new Error(`Failed to delete document permanently: ${err.message}`);
       await refresh();
     },
     [isMock, refresh],

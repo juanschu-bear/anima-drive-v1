@@ -39,6 +39,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
   const [lineItems, setLineItems] = useState<AdLineItemRow[]>([]);
   const [busy, setBusy] = useState<"open" | "download" | "trash" | "purge" | "extract" | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [docRow, setDocRow] = useState<AdDocumentRow | null>(null);
 
   // Resolve the matching DB row from the displayed RecentDoc by filename.
@@ -194,11 +195,17 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
   async function onTrash() {
     const targetId = docRow?.id ?? doc.documentId ?? null;
     if (!targetId) return;
+    setDeleteError(null);
     setBusy("trash");
-    await trashDoc(targetId);
-    setBusy(null);
-    await refresh();
-    onClose();
+    try {
+      await trashDoc(targetId);
+      await refresh();
+      onClose();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Failed to move to trash");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function onPurgeNow() {
@@ -206,11 +213,17 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
     const targetName = docRow?.filename ?? doc.originalFilename ?? doc.name;
     if (!targetId) return;
     if (!confirm(`Permanently delete "${targetName}"? This cannot be undone.`)) return;
+    setDeleteError(null);
     setBusy("purge");
-    await purgeDoc(targetId);
-    setBusy(null);
-    await refresh();
-    onClose();
+    try {
+      await purgeDoc(targetId);
+      await refresh();
+      onClose();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Failed to delete document permanently");
+    } finally {
+      setBusy(null);
+    }
   }
 
   const hasExtraction =
@@ -424,7 +437,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
 
         {/* Actions */}
         <div className="flex justify-end items-center" style={{ gap: 8, flexWrap: "wrap" }}>
-          {isAuth && (docRow || doc.documentId) && (
+          {(docRow || doc.documentId) && (
             <button
               type="button"
               onClick={onTrash}
@@ -447,7 +460,7 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
               {busy === "trash" ? "…" : "Trash"}
             </button>
           )}
-          {isAuth && (docRow || doc.documentId) && (
+          {(docRow || doc.documentId) && (
             <button
               type="button"
               onClick={onPurgeNow}
@@ -533,6 +546,9 @@ export function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) 
             {busy === "open" ? "Opening…" : "Open"}
           </button>
         </div>
+        {deleteError && (
+          <div style={{ marginTop: 8, fontSize: 11, color: "#ef4444" }}>{deleteError}</div>
+        )}
       </Panel>
     </div>
   );
