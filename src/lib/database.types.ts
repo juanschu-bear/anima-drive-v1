@@ -99,6 +99,63 @@ export interface AdMessageRow {
   created_at: string;
 }
 
+export interface AdCfoEventRow {
+  id: string;
+  user_id: string;
+  event_type: string;
+  source: string;
+  document_id: string | null;
+  conversation_id: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AdCfoProfileRow {
+  user_id: string;
+  health_score: number;
+  risk_level: "low" | "medium" | "high";
+  total_spend_30d: number;
+  total_spend_prev_30d: number;
+  active_financial_docs: number;
+  active_contract_docs: number;
+  open_due_14d_count: number;
+  open_due_14d_amount: number;
+  top_vendor: string | null;
+  top_vendor_share: number | null;
+  behavior_stress_score: number;
+  profile_json: Record<string, unknown>;
+  last_recomputed_at: string;
+  updated_at: string;
+}
+
+export interface AdCfoSignalRow {
+  id: string;
+  user_id: string;
+  signal_key: string;
+  severity: "low" | "medium" | "high" | "critical";
+  score: number;
+  title: string;
+  details: string;
+  payload: Record<string, unknown>;
+  status: "active" | "resolved";
+  detected_at: string;
+  resolved_at: string | null;
+}
+
+export interface AdCfoRecommendationRow {
+  id: string;
+  user_id: string;
+  signal_id: string | null;
+  priority: number;
+  title: string;
+  rationale: string;
+  action: string;
+  status: "pending" | "done" | "dismissed";
+  due_date: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Database {
   // Required marker for Supabase v2 typed client (>= 2.50).
   // The PostgrestVersion controls which Postgres feature flags are enabled
@@ -160,6 +217,40 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<AdMessageRow>;
+        Relationships: [];
+      };
+      ad_cfo_events: {
+        Row: AdCfoEventRow;
+        Insert: Omit<AdCfoEventRow, "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<AdCfoEventRow>;
+        Relationships: [];
+      };
+      ad_cfo_profiles: {
+        Row: AdCfoProfileRow;
+        Insert: AdCfoProfileRow;
+        Update: Partial<AdCfoProfileRow>;
+        Relationships: [];
+      };
+      ad_cfo_signals: {
+        Row: AdCfoSignalRow;
+        Insert: Omit<AdCfoSignalRow, "id" | "detected_at" | "resolved_at"> & {
+          id?: string;
+          detected_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: Partial<AdCfoSignalRow>;
+        Relationships: [];
+      };
+      ad_cfo_recommendations: {
+        Row: AdCfoRecommendationRow;
+        Insert: Omit<AdCfoRecommendationRow, "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<AdCfoRecommendationRow>;
         Relationships: [];
       };
     };

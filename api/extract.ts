@@ -25,6 +25,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { llmCall, parseJsonResponse, type LlmContent } from "./_llm.js";
 import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase.js";
+import { emitCfoEvent, recomputeCfoProfile } from "./_cfo.js";
 
 const STORAGE_BUCKET = "ad-docs";
 const SIGNED_URL_TTL_SEC = 60 * 5;
@@ -376,6 +377,22 @@ async function handle(req: VercelRequest, res: VercelResponse) {
       previous_category_key: doc.category_key ?? null,
     },
   });
+
+  await emitCfoEvent(svc, {
+    userId: user.id,
+    eventType: "document_extracted",
+    source: "anima-drive.extract",
+    payload: {
+      document_type: docType,
+      display_name: displayName,
+      total_amount: extracted.total_amount ?? null,
+      currency: extracted.currency ?? "EUR",
+      vendor: extracted.vendor ?? null,
+      due_date: extracted.due_date ?? null,
+    },
+    documentId,
+  });
+  await recomputeCfoProfile(svc, user.id);
 
   res.status(200).json({
     documentId,

@@ -9,6 +9,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { llmCall, parseJsonResponse } from "./_llm.js";
 import { authedUser, bearerToken, userClient, serviceClient } from "./_supabase.js";
+import { analyzeToneForCfo, emitCfoEvent, recomputeCfoProfile } from "./_cfo.js";
 
 interface AskBody {
   message?: string;
@@ -64,6 +65,7 @@ async function handle(req: VercelRequest, res: VercelResponse) {
 
   const sb = userClient(bearerToken(req));
   const svc = serviceClient();
+  const tone = analyzeToneForCfo(message);
 
   // Pull user's documents + extractions (single query each, joined client-side).
   const { data: docs, error: docsErr } = await sb
@@ -182,6 +184,19 @@ Answer the user's question, grounded in the corpus only. Return JSON.`;
       .update({ updated_at: new Date().toISOString() })
       .eq("id", conversationId);
   }
+
+  await emitCfoEvent(svc, {
+    userId: user.id,
+    eventType: "ask_user_message",
+    source: "anima-drive.ask",
+    payload: {
+      message_len: message.length,
+      tone,
+      provider,
+    },
+    conversationId,
+  });
+  await recomputeCfoProfile(svc, user.id);
 
   res.status(200).json({
     answer: result.answer,
