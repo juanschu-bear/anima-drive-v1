@@ -65,6 +65,26 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callDocumentAction = useCallback(
+    async (id: string, action: "trash" | "restore" | "purge") => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const res = await fetch("/api/document-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ documentId: id, action }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Document action failed: ${res.status} ${text.slice(0, 200)}`);
+      }
+    },
+    [],
+  );
 
   const refresh = useCallback(async () => {
     if (isMock) {
@@ -163,23 +183,3 @@ export function useDocuments(mode: DocumentsMode = "active"): UseDocumentsResult
     isMock,
   };
 }
-  const callDocumentAction = useCallback(
-    async (id: string, action: "trash" | "restore" | "purge") => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error("Not signed in");
-      const res = await fetch("/api/document-action", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ documentId: id, action }),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`Document action failed: ${res.status} ${text.slice(0, 200)}`);
-      }
-    },
-    [],
-  );
