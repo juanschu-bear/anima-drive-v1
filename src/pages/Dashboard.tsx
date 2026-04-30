@@ -279,7 +279,7 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1.7fr 1fr",
+              gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 2fr)",
               gap: 14,
               minHeight: 0,
               flex: 1,
@@ -306,9 +306,11 @@ export function Dashboard({ sidebarState = "expanded", aiPlacement = "panel" }: 
                 className="flex"
                 style={{
                   gap: 10,
-                  overflow: "hidden",
+                  overflowX: "auto",
+                  overflowY: "hidden",
                   paddingRight: 22,
                   paddingBottom: 4,
+                  scrollbarWidth: "thin",
                 }}
               >
                 {documents.slice(0, 5).map((d, i) => (

@@ -51,6 +51,7 @@ export function Activity() {
               style={{
                 gap: 12,
                 padding: "8px 2px",
+                alignItems: "flex-start",
                 animation: `fadeUp 420ms ${200 + i * 60}ms cubic-bezier(.2,.7,.3,1) backwards`,
               }}
             >
@@ -67,11 +68,23 @@ export function Activity() {
               >
                 <Icon name={visual.icon} size={13} stroke={1.8} />
               </div>
-              <div style={{ flex: 1, fontSize: 12.5, color: "var(--ad-text)" }}>{label}</div>
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12.5,
+                  color: "var(--ad-text)",
+                  lineHeight: 1.35,
+                  wordBreak: "break-word",
+                }}
+              >
+                {label}
+              </div>
               <div
                 style={{
                   fontSize: 11,
                   color: "var(--ad-text-faint)",
+                  flexShrink: 0,
                   ...numStyle,
                 }}
               >

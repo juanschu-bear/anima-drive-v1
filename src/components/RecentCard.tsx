@@ -24,7 +24,7 @@ export function RecentCard({ doc, delay = 0 }: RecentCardProps) {
   const tintColor = ACCENT_VARS[cat.tint];
 
   const cardStyle: CSSProperties = {
-    width: 220,
+    width: "clamp(180px, 22vw, 220px)",
     flexShrink: 0,
     padding: 12,
     borderRadius: 12,
@@ -56,9 +56,12 @@ export function RecentCard({ doc, delay = 0 }: RecentCardProps) {
           fontSize: 12,
           fontWeight: 500,
           color: "var(--ad-text)",
-          whiteSpace: "nowrap",
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
           overflow: "hidden",
-          textOverflow: "ellipsis",
+          lineHeight: 1.25,
+          minHeight: 30,
         }}
       >
         {doc.name}
