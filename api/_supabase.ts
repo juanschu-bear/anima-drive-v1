@@ -12,35 +12,18 @@
 // JSON error response.
 
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "./_env.js";
 
 function getUrl(): string {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  if (!url) {
-    throw new Error(
-      "Missing env var: SUPABASE_URL (or VITE_SUPABASE_URL) is not set in this environment.",
-    );
-  }
-  return url;
+  return getSupabaseUrl();
 }
 
 function getAnonKey(): string {
-  const key = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
-  if (!key) {
-    throw new Error(
-      "Missing env var: SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) is not set in this environment.",
-    );
-  }
-  return key;
+  return getSupabaseAnonKey();
 }
 
 function getServiceKey(): string {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) {
-    throw new Error(
-      "Missing env var: SUPABASE_SERVICE_ROLE_KEY is not set. Note: this must NOT have a VITE_ prefix.",
-    );
-  }
-  return key;
+  return getSupabaseServiceRoleKey();
 }
 
 export function userClient(accessToken: string | undefined) {

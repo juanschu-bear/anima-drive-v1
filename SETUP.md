@@ -36,8 +36,8 @@ Go to your Vercel project → **Settings** → **Environment Variables**. Add th
 
 | Name | Value | Where to find |
 |------|-------|---------------|
-| `VITE_SUPABASE_URL` | `https://wofklmwbokdjoqlstjmy.supabase.co` | Supabase → Project Settings → API |
-| `VITE_SUPABASE_ANON_KEY` | the anon public key | Supabase → Project Settings → API |
+| `SUPABASE_URL` | `https://wofklmwbokdjoqlstjmy.supabase.co` | Supabase → Project Settings → API |
+| `SUPABASE_ANON_KEY` | the anon public key | Supabase → Project Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | the service_role secret | Supabase → Project Settings → API → "service_role" |
 | `OLLAMA_URL` | `http://77.48.24.250:48439/v1/chat/completions` | (your existing Ollama proxy) |
 | `OLLAMA_MODEL` | `qwen3.5:35b` | (or whichever model you serve) |
@@ -45,7 +45,7 @@ Go to your Vercel project → **Settings** → **Environment Variables**. Add th
 | `ANTHROPIC_API_KEY` | `sk-ant-...` | https://console.anthropic.com → API Keys |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | optional, default claude-haiku-4-5 |
 
-> The `VITE_*` vars are baked into the browser bundle at build time. The non-prefixed vars are only available to API routes on the server. The service role key must NEVER be prefixed with `VITE_`.
+> Canonical env names are non-prefixed (`SUPABASE_*`). `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are still accepted as fallback aliases for compatibility.
 
 After saving, redeploy: **Deployments** → latest → **Redeploy**.
 
@@ -56,6 +56,7 @@ After deployment, three Vercel functions should be active:
 - `POST /api/categorize` → assigns a category to an uploaded document
 - `POST /api/extract` → extracts vendor/amount/line items
 - `POST /api/ask` → answers natural language questions
+- `GET/POST/DELETE /api/api-keys` → centralized ecosystem API keys (scoped, revokable)
 
 Test endpoint reachability:
 
@@ -79,7 +80,7 @@ Expected: `401 Unauthorized` (because no bearer token). That's correct — it me
 ## Troubleshooting
 
 ### "supabaseUrl is required" on page load
-The `VITE_SUPABASE_URL` env var isn't reaching the build. Re-check Vercel env vars (must be set for **Production**, not just Preview), then redeploy.
+The `SUPABASE_URL` (or `VITE_SUPABASE_URL`) env var isn't reaching the build. Re-check Vercel env vars (must be set for **Production**, not just Preview), then redeploy.
 
 ### Categorize returns 502 with "Ollama failed"
 Check that `77.48.24.250:48439` is reachable from Vercel's region. Vercel functions run in `iad1` (US East) by default — set the region in `vercel.json` if you need EU egress. The Anthropic Haiku fallback should kick in automatically when Ollama is down; verify `ANTHROPIC_API_KEY` is set.

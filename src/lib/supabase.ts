@@ -12,8 +12,15 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const runtimeEnv = (globalThis as any).__ANIMA_ENV__ ?? {};
+const url =
+  import.meta.env.VITE_SUPABASE_URL ??
+  import.meta.env.VITE_PUBLIC_SUPABASE_URL ??
+  runtimeEnv.SUPABASE_URL;
+const anonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ??
+  import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY ??
+  runtimeEnv.SUPABASE_ANON_KEY;
 
 const PLACEHOLDER_URL = "https://placeholder.supabase.co";
 const PLACEHOLDER_KEY = "placeholder-anon-key";
@@ -22,7 +29,7 @@ if (!url || !anonKey) {
   // eslint-disable-next-line no-console
   console.warn(
     "[anima-drive] Supabase env vars missing. " +
-      "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable backend. " +
+      "Set SUPABASE_URL/SUPABASE_ANON_KEY (or VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY) to enable backend. " +
       "Running in demo mode with mock data.",
   );
 }

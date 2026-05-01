@@ -127,8 +127,9 @@ export function Login() {
               marginBottom: 16,
             }}
           >
-            Supabase env vars are missing. Set <code>VITE_SUPABASE_URL</code> and{" "}
-            <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env</code> to enable login.
+            Supabase env vars are missing. Set <code>SUPABASE_URL</code> and{" "}
+            <code>SUPABASE_ANON_KEY</code> (or the <code>VITE_*</code> aliases) in{" "}
+            <code>.env</code> to enable login.
           </div>
         )}
 

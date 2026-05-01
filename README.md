@@ -135,9 +135,12 @@ npm run preview
 When wiring real data, copy `.env.example` to `.env`:
 
 ```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
+
+Alias compatibility is enabled for `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
 
 ## Roadmap
 
@@ -148,6 +151,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 - [x] Dark and light themes via CSS variables, no re-renders
 - [x] Three category visualization treatments (grid / list / cloud)
 - [x] Mock data with explicit TODO markers for Supabase migration
+- [x] Central API key API (`/api/api-keys`) with scoped, revokable keys for cross-app integrations
 
 ### Next
 
