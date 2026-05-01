@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import type { Session, User, AuthError } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { consumeSsoFromUrl } from "./sso";
 
 interface AuthCtx {
   user: User | null;
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
+    consumeSsoFromUrl().catch(() => undefined);
     if (!configured) {
       setLoading(false);
       return;
