@@ -26,17 +26,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
-    consumeSsoFromUrl().catch(() => undefined);
-    if (!configured) {
-      setLoading(false);
-      return;
-    }
+    (async () => {
+      await consumeSsoFromUrl().catch(() => undefined);
+      if (!configured) {
+        setLoading(false);
+        return;
+      }
 
-    // Fetch existing session on mount.
-    supabase.auth.getSession().then(({ data }) => {
+      // Fetch existing session on mount.
+      const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setLoading(false);
-    });
+    })();
 
     // Listen for auth state changes.
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
