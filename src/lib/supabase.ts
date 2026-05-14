@@ -12,11 +12,36 @@
 
 import { createClient } from "@supabase/supabase-js";
 
+function normalizeSupabaseUrl(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+  const dequoted = raw.trim().replace(/^['"]+|['"]+$/g, "");
+  const trimmed = dequoted.replace(/\/+$/, "");
+  try {
+    const parsed = new URL(trimmed);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    if (
+      path === "/auth/v1" ||
+      path === "/rest/v1" ||
+      path === "/storage/v1" ||
+      path === "/functions/v1" ||
+      path === "/realtime/v1"
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(`[anima-drive] Normalized SUPABASE_URL from ${parsed.pathname} to project base origin.`);
+      return parsed.origin;
+    }
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return trimmed;
+  }
+}
+
 const runtimeEnv = (globalThis as any).__ANIMA_ENV__ ?? {};
-const url =
+const rawUrl =
   import.meta.env.VITE_SUPABASE_URL ??
   import.meta.env.VITE_PUBLIC_SUPABASE_URL ??
   runtimeEnv.SUPABASE_URL;
+const url = normalizeSupabaseUrl(rawUrl);
 const anonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ??
   import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY ??
@@ -24,6 +49,7 @@ const anonKey =
 
 const PLACEHOLDER_URL = "https://placeholder.supabase.co";
 const PLACEHOLDER_KEY = "placeholder-anon-key";
+let clientConfigured = Boolean(url && anonKey);
 
 if (!url || !anonKey) {
   // eslint-disable-next-line no-console
@@ -34,21 +60,37 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase = createClient(
-  url || PLACEHOLDER_URL,
-  anonKey || PLACEHOLDER_KEY,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  },
-);
+export const supabase = (() => {
+  try {
+    return createClient(
+      url || PLACEHOLDER_URL,
+      anonKey || PLACEHOLDER_KEY,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+        },
+      },
+    );
+  } catch (error) {
+    // Invalid env values should not white-screen the app.
+    // eslint-disable-next-line no-console
+    console.error("[anima-drive] Failed to init Supabase client, falling back to demo mode:", error);
+    clientConfigured = false;
+    return createClient(PLACEHOLDER_URL, PLACEHOLDER_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+  }
+})();
 
 export const STORAGE_BUCKET = "ad-docs";
 
 /** Returns true iff the env vars are populated. Useful for graceful fallback to mocks. */
 export function isSupabaseConfigured(): boolean {
-  return Boolean(url && anonKey);
+  return clientConfigured;
 }

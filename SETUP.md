@@ -93,6 +93,12 @@ The `/api/categorize` request is firing but failing silently. Check the function
 ### "Unauthorized" on every API call
 The browser isn't sending an Authorization header. Make sure you're signed in (the bearer token comes from the Supabase session).
 
+### `401 {"error":"Invalid path specified in request URL"}`
+`SUPABASE_URL` is likely configured as a service endpoint (for example `...supabase.co/auth/v1` or `...supabase.co/rest/v1`) instead of the project base URL.
+Use exactly:
+
+`https://<project-ref>.supabase.co`
+
 ### Storage upload fails with 403
 Verify the `ad_docs user-write` storage policy exists in Supabase → Storage → Policies. Re-run the migration if it doesn't.
 
